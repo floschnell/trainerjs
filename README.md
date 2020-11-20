@@ -6,6 +6,8 @@ Bushido-JS is a Typescript package of tools to be used with the Tacx Bushido (t1
 
 This webapp enables you to use your Tacx Bushido hometrainer to ride any existing GPX track.
 
+![](demo.gif)
+
 The features of the webapp are:
 - loading and smoothing of a GPX route
 - connecting to your Bushido trainer (via WebUSB)
