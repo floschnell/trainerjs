@@ -1,0 +1,72 @@
+<html>
+    <head>
+        <title>Bushido-JS</title>
+        <meta charset="utf-8">
+
+        <script src="https://cesium.com/downloads/cesiumjs/releases/1.74/Build/Cesium/Cesium.js" charset="UTF-8"></script>
+        <link href="https://cesium.com/downloads/cesiumjs/releases/1.74/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.bundle.min.js" integrity="sha512-SuxO9djzjML6b9w9/I07IWnLnQhgyYVSpHZx0JV97kGBfTIsUYlWflyuW4ypnvhBrslz1yJ3R+S14fdCWmSmSA==" crossorigin="anonymous"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.css" integrity="sha512-/zs32ZEJh+/EO2N1b0PEdoA10JkdC3zJ8L5FTiQu82LR9S/rOQNfQN7U59U9BC12swNeRAz3HSzIL2vpp4fv3w==" crossorigin="anonymous" />
+
+        <script src="bundle.js"></script>
+        <link rel="stylesheet" href="styles.css">
+    </head>
+    <body>
+        <div id="start">
+            <label for="gpxFile">Select GPX file:</label><input type="file" id="gpxFile" multiple="false" accept=".gpx">
+            <canvas style="height: 20vh; width: 100vw;" id="chart-preview"></canvas>
+            <input type="button" id="startWorkout" value="Start Workout" disabled="true"></input>
+        </div>
+        <div id="init" style="font-size: 40px; text-align: center; margin: auto auto; width: 100vw;"></div>
+        <div id="game">
+            <div id="pause">Paused</div>
+            <div id="overlay"></div>
+            <div id="overlay-paused"></div>
+            <div id="map"></div>
+            <div id="lower">
+                <div id="rewind"><span>- 1km</span></div>
+                <canvas id="chart"></canvas>
+                <div id="forward"><span>+ 1km</span></div>
+            </div>
+        </div>
+        <script>
+            const bushidoConnection = new BushidoJS.BushidoUSB();
+            const test = false;
+            let distance = 0;
+            let speed = 20;
+
+            if (test) {
+                bushidoConnection.getData = function () {
+                    return {
+                        speed: speed * 3.6,
+                        cadence: Math.random() * 100 % 60,
+                        power: Math.random() * 200,
+                        distance,
+                    };
+                }
+    
+                window.setInterval(() => {
+                    if (bushidoConnection.isConnected()) {
+                        distance += speed;
+                        bushidoSimulator.onDistanceUpdated(distance);
+                        bushidoSimulator.onDataUpdated(bushidoConnection.getData());
+                        speed = Math.abs(speed + Math.random() * 10 - 5);
+                    }
+                }, 1000);
+            }
+
+            const bushidoSimulator = new BushidoJS.BushidoSimulator(bushidoConnection, {
+                gpxFileInputId: "gpxFile",
+                overlayElementId: "overlay",
+                gameElementId: "game",
+                initElementId: "init",
+                startElementId: "start",
+                pauseElementId: "pause",
+                forwardButtonId: "forward",
+                rewindButtonId: "rewind",
+                startButtonId: "startWorkout",
+            });
+        </script>
+    </body>
+</html>

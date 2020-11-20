@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+      "baseUrl": ".",
+      "outDir": "./dist",
+      "target": "es5",
+      "module": "CommonJS",
+      "moduleResolution": "Node",
+      "lib": ["es2016", "dom", "es5"],
+      "downlevelIteration": true,
+      "typeRoots" : ["./typings/", "./node_modules/@types/"],
+      "paths": {
+        "*": [ "./typings/*" ]
+      }
+    },
+    "include": [
+      "./src/**/*"
+    ]
+  }

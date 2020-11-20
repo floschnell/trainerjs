@@ -1,0 +1,24 @@
+{
+  "name": "bushido-js",
+  "version": "1.0.0",
+  "description": "Bushido home trainer software",
+  "main": "simulator.ts",
+  "dependencies": {
+    "gpxparser": "^3.0.6"
+  },
+  "devDependencies": {
+    "@types/cesium": "^1.67.13",
+    "@types/chart.js": "^2.9.28",
+    "copy-webpack-plugin": "^6.3.2",
+    "ts-loader": "^8.0.11",
+    "typescript": "^4.0.5",
+    "webpack": "^5.5.1",
+    "webpack-cli": "^4.2.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "webpack"
+  },
+  "author": "Florian Schnell",
+  "license": "MIT"
+}
