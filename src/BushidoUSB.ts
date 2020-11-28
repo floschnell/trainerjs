@@ -13,6 +13,9 @@ interface USBDevice {
     claimInterface(iface: number): Promise<void>;
     transferOut(channel: number, data: ArrayBuffer): Promise<boolean>;
     transferIn(channel: number, maxBytes: number): Promise<any>;
+    reset(): Promise<any>;
+    releaseInterface(iface: number): Promise<any>;
+    close(): Promise<any>;
 };
 
 
@@ -151,6 +154,13 @@ class BushidoInitPCConnectionMessage extends BushidoMessage {
 }
 
 
+class BushidoClosePCConnectionMessage extends BushidoMessage {
+    constructor() {
+        super([0xac, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    }
+}
+
+
 class BushidoData01Message extends BushidoMessage {
     constructor(slope: number, weight: number) {
         const corrected_slope = Math.max(-50, Math.min(200, Math.round(slope * 10.0)));
@@ -161,6 +171,7 @@ class BushidoData01Message extends BushidoMessage {
         }
     }
 }
+
 
 class BushidoData02Message extends BushidoMessage {
     constructor() {
@@ -203,9 +214,9 @@ export class BushidoUSB {
     private out_queue: QueuedMessage[] = [];
     private log: Console = null;
     private connected: boolean = false;
-    private run_interval_handle: number = -1;
     private last_button_code: number = -1;
     private last_button_timestamp: number = 0;
+    private dataInterval: number = 0;
 
     public onPaused: () => void = null;
     public onResumed: () => void = null;
@@ -242,25 +253,12 @@ export class BushidoUSB {
         return this.connected;
     }
 
-    public async initUSBDevice(): Promise<USBDevice> {
-        // @ts-ignore
-        this.device = await navigator.usb.requestDevice({
-            filters: [{
-                vendorId: 0x0FCF,
-                productId: 0x1008,
-            }]
-        });
-
-        await this.device.open();
-        this.log_info("device", this.device, "opened");
-
-        await this.device.selectConfiguration(1);
-        this.log_info("config selected");
-
-        await this.device.claimInterface(0);
-        this.log_info("interface claimed");
-
-        return this.device;
+    public async start(): Promise<void> {
+        await this.initUSBDevice();
+        this.connected = true;
+        const connectionInitializedPromise = this.initializeANTConnection();
+        this.sendReceiveCycle();
+        return connectionInitializedPromise;
     }
 
     public async connectToHeadUnit(): Promise<void> {
@@ -281,38 +279,79 @@ export class BushidoUSB {
         });
     }
 
-    public run(): void {
-        this.initializeANTConnection();
-        this.sendReceiveCycle();
+    public async disconnectFromHeadUnit(): Promise<void> {
+        return new Promise(resolve => {
+            this.queueMessage(new BushidoInitPCConnectionMessage());
+            this.queueMessage(new BushidoClosePCConnectionMessage(), resolve);
+        });
     }
 
-    public stop(): void {
-        clearTimeout(this.run_interval_handle);
+    public async stop(): Promise<void> {
+        await this.disconnectFromHeadUnit();
+        this.connected = false;
+        await this.device.releaseInterface(0);
+        await this.device.close();
+        this.out_queue.splice(0);
+    }
+
+    private async initUSBDevice(): Promise<USBDevice> {
+        // @ts-ignore
+        this.device = await navigator.usb.requestDevice({
+            filters: [{
+                vendorId: 0x0FCF,
+                productId: 0x1008,
+            }]
+        });
+
+        await this.device.open();
+        this.log_info("device", this.device, "opened");
+        
+        await this.device.selectConfiguration(1);
+        this.log_info("config selected");
+        
+        await this.device.claimInterface(0);
+        this.log_info("interface claimed");
+
+        return this.device;
     }
 
     private async sendReceiveCycle(): Promise<void> {
-        await this.sendMessage();
-        const in_message = await this.receiveMessage();
-        this.processMessage(in_message);
-        this.run_interval_handle = window.setTimeout(this.sendReceiveCycle.bind(this), 0);
+        if (this.connected) {
+            await this.sendMessage();
+            try {
+                const in_message = await this.receiveMessage();
+                this.processMessage(in_message);
+            } catch (e) {
+                if (this.connected) {
+                    throw e;
+                }
+            } finally {
+                window.setTimeout(this.sendReceiveCycle.bind(this), 0);
+            }
+        }
     }
 
-    private initializeANTConnection(): void {
+    private initializeANTConnection(): Promise<void> {
         this.queueMessage(new ResetMessage());
         this.queueMessage(new SetNetworkKeyMessage([0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,]));
         this.queueMessage(new AssignChannelMessage(0x00));
         this.queueMessage(new SetChannelIdMessage(0x52));
         this.queueMessage(new SetChannelPeriodMessage(4096));
         this.queueMessage(new SetChannelRfFrequencyMessage(2460));
-        this.queueMessage(new OpenChannelMessage(), () => {
+        return new Promise((resolve) => this.queueMessage(new OpenChannelMessage(), () => {
             this.log_info("opened ANT+ connection");
-            this.connected = true;
-        });
+            resolve();
+        }));
     }
-
+    
     private sendData(): void {
-        this.queueMessage(new BushidoData01Message(this.data.slope, this.data.weight));
-        this.queueMessage(new BushidoData02Message());
+        if (++this.dataInterval % 2 === 1) {
+            this.log_info("send data 1");
+            this.queueMessage(new BushidoData01Message(this.data.slope, this.data.weight));
+        } else {
+            this.log_info("send data 2");
+            this.queueMessage(new BushidoData02Message());
+        }
     }
 
     private continue(): void {

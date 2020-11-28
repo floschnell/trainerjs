@@ -276,9 +276,7 @@ export class BushidoSimulator {
         this.startElement.style.display = "none";
 
         try {
-            await this.bushidoConnection.initUSBDevice();
-
-            this.bushidoConnection.run();
+            await this.bushidoConnection.start();
 
             this.initElement.innerHTML = "Stelle Verbindung zur Bushido Steuerungseinheit her ...";
             await this.bushidoConnection.connectToHeadUnit();
