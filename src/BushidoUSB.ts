@@ -161,7 +161,7 @@ class BushidoClosePCConnectionMessage extends BushidoMessage {
 }
 
 
-class BushidoData01Message extends BushidoMessage {
+class BushidoDataMessage extends BushidoMessage {
     constructor(slope: number, weight: number) {
         const corrected_slope = Math.max(-50, Math.min(200, Math.round(slope * 10.0)));
         if (corrected_slope < 0) {
@@ -169,13 +169,6 @@ class BushidoData01Message extends BushidoMessage {
         } else {
             super([0xdc, 0x01, 0x00, 0x00, corrected_slope, weight, 0x00, 0x00]);
         }
-    }
-}
-
-
-class BushidoData02Message extends BushidoMessage {
-    constructor() {
-        super([0xdc, 0x02, 0x00, 0x99, 0x00, 0x00, 0x00, 0x00]);
     }
 }
 
@@ -216,12 +209,12 @@ export class BushidoUSB {
     private connected: boolean = false;
     private last_button_code: number = -1;
     private last_button_timestamp: number = 0;
-    private dataInterval: number = 0;
 
     public onPaused: () => void = null;
     public onResumed: () => void = null;
     public onDataUpdated: (updatedData: BushidoData) => void = null;
     public onDistanceUpdated: (updatedDistance: number) => void = null;
+    public onSpeedUpdated: (updatedSpeed: number) => void = null;
 
     public onButtonLeft: () => void = null;
     public onButtonDown: () => void = null;
@@ -345,13 +338,8 @@ export class BushidoUSB {
     }
     
     private sendData(): void {
-        if (++this.dataInterval % 2 === 1) {
-            this.log_info("send data 1");
-            this.queueMessage(new BushidoData01Message(this.data.slope, this.data.weight));
-        } else {
-            this.log_info("send data 2");
-            this.queueMessage(new BushidoData02Message());
-        }
+        this.queueMessage(new BushidoDataMessage(this.data.slope, this.data.weight));
+        this.log_info("send data ...");
     }
 
     private continue(): void {
@@ -429,6 +417,7 @@ export class BushidoUSB {
                 };
                 this.log_info("received speed", this.data.speed, ", power", this.data.power, "and cadence", this.data.cadence);
                 if (this.onDataUpdated) this.onDataUpdated(this.data);
+                if (this.onSpeedUpdated) this.onSpeedUpdated(this.data.speed);
             } else if (data[1] === 0x02) {
                 const old_distance = this.data.distance;
                 this.data = {
