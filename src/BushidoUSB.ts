@@ -193,9 +193,9 @@ interface QueuedMessage {
 
 class BushidoHeadUnit {
     static BUTTON_LEFT: number = 0x01;
-    static BUTTON_DOWN: number = 0x02;
+    static BUTTON_UP: number = 0x02;
     static BUTTON_OK: number = 0x03;
-    static BUTTON_UP: number = 0x04;
+    static BUTTON_DOWN: number = 0x04;
     static BUTTON_RIGHT: number = 0x05;
 }
 
@@ -214,7 +214,6 @@ export class BushidoUSB {
     public onResumed: () => void = null;
     public onDataUpdated: (updatedData: BushidoData) => void = null;
     public onDistanceUpdated: (updatedDistance: number) => void = null;
-    public onSpeedUpdated: (updatedSpeed: number) => void = null;
 
     public onButtonLeft: () => void = null;
     public onButtonDown: () => void = null;
@@ -417,7 +416,6 @@ export class BushidoUSB {
                 };
                 this.log_info("received speed", this.data.speed, ", power", this.data.power, "and cadence", this.data.cadence);
                 if (this.onDataUpdated) this.onDataUpdated(this.data);
-                if (this.onSpeedUpdated) this.onSpeedUpdated(this.data.speed);
             } else if (data[1] === 0x02) {
                 const old_distance = this.data.distance;
                 this.data = {
@@ -446,7 +444,14 @@ export class BushidoUSB {
                 this.sendData();
             } else if (data[1] === 0x01 && data[2] === 0x03) {
                 this.is_paused = true;
-                this.log_info("sending continue message ...");
+                this.data = {
+                    ...this.data,
+                    power: 0,
+                    cadence: 0,
+                    speed: 0,
+                };
+                this.log_info("pause detected, sending continue message ...");
+                if (this.onDataUpdated) this.onDataUpdated(this.data);
                 if (this.onPaused) this.onPaused();
                 this.continue();
             }

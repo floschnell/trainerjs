@@ -207,11 +207,13 @@ export class BushidoSimulator {
     }
 
     public onButtonDown() {
-        this.activeChartMetric = ((this.activeChartMetric - 1 + CHART_METRICS.length) % CHART_METRICS.length) + 1;
+        this.activeChartMetric = this.activeChartMetric == 1 ? CHART_METRICS.length : this.activeChartMetric - 1;
+        this.drawChart();
     }
-    
+
     public onButtonUp() {
-        this.activeChartMetric = ((this.activeChartMetric + 1 + CHART_METRICS.length) % CHART_METRICS.length) + 1;
+        this.activeChartMetric = this.activeChartMetric == CHART_METRICS.length ? 1 : this.activeChartMetric + 1;
+        this.drawChart();
     }
 
     public onButtonLeft() {
@@ -233,15 +235,15 @@ export class BushidoSimulator {
     private createXmlString(lines: [number, number, number, Date][][]) {
         let result = '<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" version="1.1" creator="runtracker"><metadata/><trk><name></name><desc></desc>'
         result += lines.reduce((accum, curr) => {
-          let segmentTag = '<trkseg>';
-          segmentTag += curr.map((point) => `<trkpt lat="${point[1]}" lon="${point[0]}"><ele>${point[2]}</ele><time>${point[3].toISOString()}</time></trkpt>`).join('');
-          segmentTag += '</trkseg>'
-      
-          return accum += segmentTag;
+            let segmentTag = '<trkseg>';
+            segmentTag += curr.map((point) => `<trkpt lat="${point[1]}" lon="${point[0]}"><ele>${point[2]}</ele><time>${point[3].toISOString()}</time></trkpt>`).join('');
+            segmentTag += '</trkseg>'
+
+            return accum += segmentTag;
         }, '');
         result += '</trk></gpx>';
         return result;
-      }
+    }
 
     public seek(value: number): number {
         if (this.bushidoConnection.getData().distance + this.offset + value >= 0) {
@@ -280,12 +282,12 @@ export class BushidoSimulator {
 
             this.initElement.innerHTML = "Stelle Verbindung zur Bushido Steuerungseinheit her ...";
             await this.bushidoConnection.connectToHeadUnit();
-            
+
             this.initElement.innerHTML = "Starte neues Workout ...";
             await this.bushidoConnection.resetHeadUnit();
             await this.bushidoConnection.startCyclingCourse();
             await new Promise((resolve) => window.setTimeout(resolve, 1000));
-            
+
             this.gameElement.style.display = "flex";
             this.initElement.style.opacity = "0%";
             window.setTimeout(() => this.initElement.style.display = "none", 5000);
@@ -324,7 +326,7 @@ export class BushidoSimulator {
             <div style="display:flex"><div style="flex-grow:1">Kadenz:</div><div>${Math.round(avgCadence)}</div></div>
             <div style="cursor: pointer; background: #267fca; color: white; text-align: center;" onclick="bushidoSimulator.export()">GPX Herunterladen</div>`;
     }
-    
+
     public onResumed() {
         this.pauseElement.style.display = "none";
         this.overlayElement.style.display = "block";
@@ -337,13 +339,12 @@ export class BushidoSimulator {
         const nextIndex = Math.ceil(corrected_distance / 20);
         const nextSegment = this.smoothedSegments[nextIndex];
 
-        console.log("next segment", nextSegment);
         if (nextSegment !== undefined) {
             const nextSlope = Math.max(Math.min(nextSegment.slope, slope + BushidoSimulator.MAX_SLOPE_CHANGE), slope - BushidoSimulator.MAX_SLOPE_CHANGE);
             this.bushidoConnection.setSlope(nextSlope);
             console.log("sent new slope of", nextSlope);
         }
-        
+
         if (!this.bushidoConnection.isPaused()) {
             if (Math.ceil(corrected_distance / 20) > Math.ceil(this.progressedDistance / 20)) {
                 this.recording[Math.floor(corrected_distance / 20)] = {
@@ -476,7 +477,7 @@ export class BushidoSimulator {
         const index = Math.ceil(this.progressedDistance / 20);
         const buffer = Math.round(1000 / 20);
         const currentSegments = this.smoothedSegments.slice(Math.max(0, index - buffer), Math.min(this.smoothedSegments.length, index + buffer + 1));
-        const data = currentSegments.map(s => ({x: s.distance, y: s.elevation}));
+        const data = currentSegments.map(s => ({ x: s.distance, y: s.elevation }));
 
         this.chart.data.datasets[0].data.splice(0);
         (this.chart.data.datasets[0].data as Array<ChartPoint>).push(...data);
@@ -486,18 +487,17 @@ export class BushidoSimulator {
             const metricData = data.map(d => this.recording[Math.floor(d.x / 20)] ? ({
                 x: this.recording[Math.floor(d.x / 20)].distance,
                 y: this.recording[Math.floor(d.x / 20)][metric.id],
-            }) : null ).filter(d => d != null);
+            }) : null).filter(d => d != null);
 
             dataset.data.splice(0);
             (dataset.data as Array<ChartPoint>).push(...metricData);
             dataset.hidden = this.activeChartMetric !== metric.datasetIndex;
         }
-        
+
         this.chart.options.scales.xAxes[0].ticks.min = Math.max(0, index - buffer) * 20;
         this.chart.options.scales.xAxes[0].ticks.max = Math.min(this.smoothedSegments.length, index + buffer) * 20;
 
         this.chart.update();
-        console.log("average:", this.getAverage());
     }
 
     private async renderLoop(): Promise<void> {
@@ -524,10 +524,10 @@ export class BushidoSimulator {
 
             this.player.orientation = orientation;
             this.player.position = playerFixed;
-            
+
             // @ts-ignore
             const localToFixed = Cesium.Transforms.localFrameToFixedFrameGenerator("east", "north")(playerFixed);
-            
+
             const cameraTarget = (Math.PI * 2 - heading + Math.PI * 1.5) % (Math.PI * 2);
             const leftRotationDistance = cameraTarget > this.cameraRotation ? cameraTarget - this.cameraRotation : Math.PI * 2 - this.cameraRotation + cameraTarget;
             const rightRotationDistance = cameraTarget < this.cameraRotation ? this.cameraRotation - cameraTarget : this.cameraRotation + Math.PI * 2 - cameraTarget;
@@ -630,7 +630,7 @@ export class BushidoSimulator {
         return smoothedSegments;
     }
 
-    private getAverage(): {speed: number, power: number, cadence: number} {
+    private getAverage(): { speed: number, power: number, cadence: number } {
         return this.recording.reduce((avg, cur, n) => ({
             speed: (avg.speed * n + cur.speed) / (n + 1),
             power: (avg.power * n + cur.power) / (n + 1),
