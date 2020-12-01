@@ -1,4 +1,4 @@
-import { BushidoData, BushidoUSB } from "./BushidoUSB";
+import { BushidoData, BushidoDriver } from "./BushidoDriver";
 import * as Cesium from "cesium";
 import * as Chart from "chart.js";
 import * as gpxParser from "gpxparser";
@@ -72,7 +72,7 @@ export class BushidoSimulator {
     private progressedDistance: number = 0;
     private subprogress: number = 0;
     private lastRender: number = performance.now();
-    private bushidoConnection: BushidoUSB = null;
+    private bushidoConnection: BushidoDriver = null;
     private recording: Recording[] = [];
     private activeChartMetric: number = 1;
     private chart: Chart = null;
@@ -88,7 +88,7 @@ export class BushidoSimulator {
     private pauseElement: HTMLElement = null;
     private overlayPausedElement: HTMLElement = null;
 
-    constructor(bushidoConnection: BushidoUSB, {
+    constructor(bushidoConnection: BushidoDriver, {
         gpxFileInputId,
         overlayElementId,
         gameElementId,
@@ -143,27 +143,27 @@ export class BushidoSimulator {
             type: 'line',
             data: {
                 datasets: [{
-                    label: "Elevation",
+                    label: "Elevation (m)",
                     data: [],
                     borderColor: 'grey',
                     yAxisID: 'y-axis-elevation',
                 },
                 {
-                    label: "Geschwindigkeit",
+                    label: "Speed (km/h)",
                     data: [],
                     borderColor: 'green',
                     fill: false,
                     yAxisID: 'y-axis-metrics',
                 },
                 {
-                    label: "Kadenz",
+                    label: "Cadence (rpm)",
                     data: [],
                     borderColor: 'blue',
                     fill: false,
                     yAxisID: 'y-axis-metrics',
                 },
                 {
-                    label: "Watt",
+                    label: "Power (Watts)",
                     data: [],
                     borderColor: 'red',
                     fill: false,
@@ -306,7 +306,13 @@ export class BushidoSimulator {
     }
 
     public onDataUpdated(bushidoData: BushidoData) {
-        this.overlayElement.innerHTML = `<b>Speed:</b> ${Math.round(bushidoData.speed * 10) / 10} km/h<br /><b>Cadence</b>: ${Math.round(bushidoData.cadence)}<br /><b>Power</b>: ${Math.round(bushidoData.power)} Watt<br /><b>Distance</b>: ${Math.round((bushidoData.distance + this.offset) / 10) / 100} km (${Math.round((bushidoData.distance + this.offset) * 1000 / (this.smoothedSegments.length * 20)) / 10}%)<br /><b>Slope</b>: ${Math.round(bushidoData.slope * 10) / 10}%`;
+        this.overlayElement.innerHTML = `
+            <div style="display:flex"><div style="flex-grow:1">Speed:</div><div>${Math.round(bushidoData.speed * 10) / 10} km/h</div></div>
+            <div style="display:flex"><div style="flex-grow:1">Cadence:</div><div>${Math.round(bushidoData.cadence)}</div></div>
+            <div style="display:flex"><div style="flex-grow:1">Power:</div><div>${Math.round(bushidoData.power)} Watts</div></div>
+            <div style="display:flex"><div style="flex-grow:1">Distance:</div><div>${Math.round((bushidoData.distance + this.offset) / 10) / 100} km (${Math.round((bushidoData.distance + this.offset) * 1000 / (this.smoothedSegments.length * 20)) / 10}%)</div></div>
+            <div style="display:flex"><div style="flex-grow:1">Slope:</div><div>${Math.round(bushidoData.slope * 10) / 10}%</div></div>
+        `;
     }
 
     public onPaused(): void {
@@ -320,16 +326,16 @@ export class BushidoSimulator {
             cadence: avgCadence,
         } = this.getAverage();
         this.overlayPausedElement.innerHTML = `
-            <div>Pausiert bei ${Math.round((bushidoData.distance + this.offset) / 10) / 100} km (${Math.round((bushidoData.distance + this.offset) * 1000 / (this.smoothedSegments.length * 20)) / 10}%)</div>
-            <div style="display:flex"><div style="flex-grow:1">Geschw.:</div><div>${Math.round(avgSpeed * 10) / 10} km/h</div></div>
-            <div style="display:flex"><div style="flex-grow:1">Power:</div><div>${Math.round(avgPower)} Watt</div></div>
-            <div style="display:flex"><div style="flex-grow:1">Kadenz:</div><div>${Math.round(avgCadence)}</div></div>
-            <div style="cursor: pointer; background: #267fca; color: white; text-align: center;" onclick="bushidoSimulator.export()">GPX Herunterladen</div>`;
+            <div>Paused at ${Math.round((bushidoData.distance + this.offset) / 10) / 100} km (${Math.round((bushidoData.distance + this.offset) * 1000 / (this.smoothedSegments.length * 20)) / 10}%)</div>
+            <div style="display:flex"><div style="flex-grow:1">Speed:</div><div>${Math.round(avgSpeed * 10) / 10} km/h</div></div>
+            <div style="display:flex"><div style="flex-grow:1">Power:</div><div>${Math.round(avgPower)} Watts</div></div>
+            <div style="display:flex"><div style="flex-grow:1">Cadence:</div><div>${Math.round(avgCadence)}</div></div>
+            <div style="cursor: pointer; background: #267fca; color: white; text-align: center;" onclick="bushidoSimulator.export()">Download GPX</div>`;
     }
 
     public onResumed() {
         this.pauseElement.style.display = "none";
-        this.overlayElement.style.display = "block";
+        this.overlayElement.style.display = "flex";
         this.overlayPausedElement.style.display = "none";
     }
 

@@ -30,6 +30,7 @@
 
 html {
     height: 100%;
+    font-family: monospace;
 }
 
 .cesium-viewer {
@@ -55,6 +56,10 @@ html {
     stroke: #267fca !important;
 }
 
+.cesium-viewer-toolbar {
+    display: none !important;
+}
+
 #overlay {
     position: absolute;
     z-index: 1000;
@@ -63,9 +68,12 @@ html {
     width: 400px;
     height: 200px;
     background: rgba(255, 255, 255, 0.8);
-    font-size: 35px;
+    font-size: 25px;
     color: black;
     padding: 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 #overlay-paused {
@@ -76,7 +84,7 @@ html {
     width: 400px;
     height: 250px;
     background: rgba(255, 255, 255, 0.8);
-    font-size: 35px;
+    font-size: 25px;
     color: black;
     padding: 40px;
     display: flex;
