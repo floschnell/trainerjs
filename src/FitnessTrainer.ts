@@ -1,12 +1,20 @@
+/**
+ * a fitness trainer has to provide these information
+ * to the simulator, so that it can update visuals accordingly
+ */
 export interface BikeTrainerData {
-    cadence: number;
-    speed: number;
-    power: number;
-    distance: number;
-    slope: number;
-    weight: number;
+    readonly cadence: number;
+    readonly speed: number;
+    readonly power: number;
+    readonly distance: number;
+    readonly slope: number;
+    readonly weight: number;
 }
 
+/**
+ * any new fitness trainer needs to implement this interface
+ * so that the BikeSimulator can communicate with it.
+ */
 export interface BikeTrainer {
     connect(): Promise<void>;
     disconnect(): Promise<void>;
