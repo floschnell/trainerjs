@@ -31,13 +31,13 @@
             </div>
         </div>
         <script>
-            const bushidoConnection = new BushidoJS.BushidoDriver();
+            const bushido = new BushidoJS.BushidoDriver();
             const test = false;
             let distance = 0;
             let speed = 20;
 
             if (test) {
-                bushidoConnection.getData = function () {
+                bushido.getData = function () {
                     return {
                         speed: speed * 3.6,
                         cadence: Math.random() * 100 % 60,
@@ -47,16 +47,16 @@
                 }
     
                 window.setInterval(() => {
-                    if (bushidoConnection.isConnected()) {
+                    if (bushido.isConnected()) {
                         distance += speed;
-                        bushidoSimulator.onDistanceUpdated(distance);
-                        bushidoSimulator.onDataUpdated(bushidoConnection.getData());
+                        bikeSimulator.onDistanceUpdated(distance);
+                        bikeSimulator.onDataUpdated(bushido.getData());
                         speed = Math.abs(speed + Math.random() * 10 - 5);
                     }
                 }, 1000);
             }
 
-            const bushidoSimulator = new BushidoJS.BushidoSimulator(bushidoConnection, {
+            const bikeSimulator = new BushidoJS.BikeSimulator(bushido, {
                 gpxFileInputId: "gpxFile",
                 overlayElementId: "overlay",
                 gameElementId: "game",

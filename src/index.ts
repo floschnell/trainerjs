@@ -1,2 +1,2 @@
-export { BushidoSimulator } from "./BushidoSimulator";
-export { BushidoDriver } from "./BushidoDriver";
+export { BikeSimulator } from "./BikeSimulator";
+export { BushidoDriver } from "./drivers/BushidoDriver";

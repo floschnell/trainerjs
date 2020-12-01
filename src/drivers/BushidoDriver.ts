@@ -7,6 +7,7 @@
  */
 
 import { Message, BroadcastMessage, AntDriver } from './AntDriver';
+import { BikeTrainer, BikeTrainerData } from '../FitnessTrainer';
 
 
 class BushidoResetHeadUnitMessage extends BroadcastMessage {
@@ -56,7 +57,7 @@ class BushidoDataMessage extends BroadcastMessage {
 }
 
 
-export class BushidoData {
+export class BushidoData implements BikeTrainerData {
     public readonly speed: number = 0;
     public readonly cadence: number = 0;
     public readonly power: number = 0;
@@ -77,7 +78,7 @@ class BushidoHeadUnit {
 }
 
 
-export class BushidoDriver extends AntDriver {
+export class BushidoDriver extends AntDriver implements BikeTrainer {
     private data: BushidoData = new BushidoData();
     private is_paused: boolean = false;
     private last_button_code: number = -1;
@@ -120,6 +121,12 @@ export class BushidoDriver extends AntDriver {
         return this.is_paused;
     }
 
+    public async startWorkout(): Promise<void> {
+        await this.connectToHeadUnit();
+        await this.resetHeadUnit();
+        await this.startCyclingCourse();
+    }
+
     public async connectToHeadUnit(): Promise<void> {
         return new Promise((resolve) => {
             this.queueMessage(new BushidoInitPCConnectionMessage(), resolve);
@@ -145,9 +152,9 @@ export class BushidoDriver extends AntDriver {
         });
     }
 
-    public async stop(): Promise<void> {
+    public async disconnect(): Promise<void> {
         await this.disconnectFromHeadUnit();
-        super.stop();
+        super.disconnect();
     }
     
     private sendData(): void {

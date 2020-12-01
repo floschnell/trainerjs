@@ -162,7 +162,7 @@ export abstract class AntDriver {
         return this.connected;
     }
 
-    public async start(): Promise<void> {
+    public async connect(): Promise<void> {
         await this.initUSBDevice();
         this.connected = true;
         const connectionInitializedPromise = this.initializeANTConnection();
@@ -170,7 +170,7 @@ export abstract class AntDriver {
         return connectionInitializedPromise;
     }
 
-    public async stop(): Promise<void> {
+    public async disconnect(): Promise<void> {
         this.connected = false;
         await this.device.releaseInterface(0);
         await this.device.close();

@@ -1,9 +1,9 @@
-import { BushidoData, BushidoDriver } from "./BushidoDriver";
 import * as Cesium from "cesium";
 import * as Chart from "chart.js";
 import * as gpxParser from "gpxparser";
 import { MathHelpers } from "./MathHelpers";
 import { ChartPoint } from "chart.js";
+import { BikeTrainer, BikeTrainerData } from "./FitnessTrainer";
 
 const CHART_METRICS = [
     {
@@ -49,7 +49,7 @@ interface SmoothedSegment {
     lng: number,
 }
 
-interface Recording extends BushidoData {
+interface Recording extends BikeTrainerData {
     time: number,
 }
 
@@ -61,7 +61,7 @@ interface RiderPosition {
 }
 
 
-export class BushidoSimulator {
+export class BikeSimulator {
     private static MAX_SLOPE_CHANGE = 1.0;
 
     private cameraRotation: number = 0;
@@ -72,7 +72,7 @@ export class BushidoSimulator {
     private progressedDistance: number = 0;
     private subprogress: number = 0;
     private lastRender: number = performance.now();
-    private bushidoConnection: BushidoDriver = null;
+    private bikeTrainer: BikeTrainer = null;
     private recording: Recording[] = [];
     private activeChartMetric: number = 1;
     private chart: Chart = null;
@@ -88,7 +88,7 @@ export class BushidoSimulator {
     private pauseElement: HTMLElement = null;
     private overlayPausedElement: HTMLElement = null;
 
-    constructor(bushidoConnection: BushidoDriver, {
+    constructor(bikeTrainer: BikeTrainer, {
         gpxFileInputId,
         overlayElementId,
         gameElementId,
@@ -107,20 +107,20 @@ export class BushidoSimulator {
         this.progressedDistance = 0;
         this.subprogress = 0;
         this.lastRender = performance.now();
-        this.bushidoConnection = bushidoConnection;
+        this.bikeTrainer = bikeTrainer;
         this.recording = [];
         this.activeChartMetric = 1;
         this.gpx = null;
 
-        if (this.bushidoConnection != null) {
-            this.bushidoConnection.onDataUpdated = this.onDataUpdated.bind(this);
-            this.bushidoConnection.onPaused = this.onPaused.bind(this);
-            this.bushidoConnection.onResumed = this.onResumed.bind(this);
-            this.bushidoConnection.onDistanceUpdated = this.onDistanceUpdated.bind(this);
-            this.bushidoConnection.onButtonDown = this.onButtonDown.bind(this);
-            this.bushidoConnection.onButtonUp = this.onButtonUp.bind(this);
-            this.bushidoConnection.onButtonRight = this.onButtonRight.bind(this);
-            this.bushidoConnection.onButtonLeft = this.onButtonLeft.bind(this);
+        if (this.bikeTrainer != null) {
+            this.bikeTrainer.onDataUpdated = this.onDataUpdated.bind(this);
+            this.bikeTrainer.onPaused = this.onPaused.bind(this);
+            this.bikeTrainer.onResumed = this.onResumed.bind(this);
+            this.bikeTrainer.onDistanceUpdated = this.onDistanceUpdated.bind(this);
+            this.bikeTrainer.onButtonDown = this.onButtonDown.bind(this);
+            this.bikeTrainer.onButtonUp = this.onButtonUp.bind(this);
+            this.bikeTrainer.onButtonRight = this.onButtonRight.bind(this);
+            this.bikeTrainer.onButtonLeft = this.onButtonLeft.bind(this);
         }
 
         this.gpxFileInput = document.getElementById(gpxFileInputId) as HTMLInputElement;
@@ -246,11 +246,11 @@ export class BushidoSimulator {
     }
 
     public seek(value: number): number {
-        if (this.bushidoConnection.getData().distance + this.offset + value >= 0) {
+        if (this.bikeTrainer.getData().distance + this.offset + value >= 0) {
             this.offset += value;
-            this.onDistanceUpdated(this.bushidoConnection.getData().distance);
+            this.onDistanceUpdated(this.bikeTrainer.getData().distance);
         }
-        return this.bushidoConnection.getData().distance + this.offset + value;
+        return this.bikeTrainer.getData().distance + this.offset + value;
     }
 
     public async prepare(): Promise<void> {
@@ -273,19 +273,15 @@ export class BushidoSimulator {
     }
 
     async start(): Promise<void> {
-        this.initElement.innerHTML = "Warte auf USB Gerät ...";
         this.initElement.style.display = "block";
         this.startElement.style.display = "none";
 
         try {
-            await this.bushidoConnection.start();
+            this.initElement.innerHTML = "Connecting to bike trainer ...";
+            await this.bikeTrainer.connect();
 
-            this.initElement.innerHTML = "Stelle Verbindung zur Bushido Steuerungseinheit her ...";
-            await this.bushidoConnection.connectToHeadUnit();
-
-            this.initElement.innerHTML = "Starte neues Workout ...";
-            await this.bushidoConnection.resetHeadUnit();
-            await this.bushidoConnection.startCyclingCourse();
+            this.initElement.innerHTML = "Starting new workout ...";
+            await this.bikeTrainer.startWorkout();
             await new Promise((resolve) => window.setTimeout(resolve, 1000));
 
             this.gameElement.style.display = "flex";
@@ -299,24 +295,31 @@ export class BushidoSimulator {
 
             this.onDistanceUpdated(0);
             this.onPaused();
-            this.onDataUpdated(new BushidoData());
+            this.onDataUpdated(<BikeTrainerData>{
+                cadence: 0,
+                distance: 0,
+                power: 0,
+                slope: 0,
+                speed: 0,
+                weight: 0,
+            });
         } catch (e) {
             console.error(e);
         }
     }
 
-    public onDataUpdated(bushidoData: BushidoData) {
+    public onDataUpdated(bikeTrainerData: BikeTrainerData) {
         this.overlayElement.innerHTML = `
-            <div style="display:flex"><div style="flex-grow:1">Speed:</div><div>${Math.round(bushidoData.speed * 10) / 10} km/h</div></div>
-            <div style="display:flex"><div style="flex-grow:1">Cadence:</div><div>${Math.round(bushidoData.cadence)}</div></div>
-            <div style="display:flex"><div style="flex-grow:1">Power:</div><div>${Math.round(bushidoData.power)} Watts</div></div>
-            <div style="display:flex"><div style="flex-grow:1">Distance:</div><div>${Math.round((bushidoData.distance + this.offset) / 10) / 100} km (${Math.round((bushidoData.distance + this.offset) * 1000 / (this.smoothedSegments.length * 20)) / 10}%)</div></div>
-            <div style="display:flex"><div style="flex-grow:1">Slope:</div><div>${Math.round(bushidoData.slope * 10) / 10}%</div></div>
+            <div style="display:flex"><div style="flex-grow:1">Speed:</div><div>${Math.round(bikeTrainerData.speed * 10) / 10} km/h</div></div>
+            <div style="display:flex"><div style="flex-grow:1">Cadence:</div><div>${Math.round(bikeTrainerData.cadence)}</div></div>
+            <div style="display:flex"><div style="flex-grow:1">Power:</div><div>${Math.round(bikeTrainerData.power)} Watts</div></div>
+            <div style="display:flex"><div style="flex-grow:1">Distance:</div><div>${Math.round((bikeTrainerData.distance + this.offset) / 10) / 100} km (${Math.round((bikeTrainerData.distance + this.offset) * 1000 / (this.smoothedSegments.length * 20)) / 10}%)</div></div>
+            <div style="display:flex"><div style="flex-grow:1">Slope:</div><div>${Math.round(bikeTrainerData.slope * 10) / 10}%</div></div>
         `;
     }
 
     public onPaused(): void {
-        const bushidoData = this.bushidoConnection.getData();
+        const bikeTrainerData = this.bikeTrainer.getData();
         this.pauseElement.style.display = "block";
         this.overlayElement.style.display = "none";
         this.overlayPausedElement.style.display = "flex";
@@ -326,11 +329,11 @@ export class BushidoSimulator {
             cadence: avgCadence,
         } = this.getAverage();
         this.overlayPausedElement.innerHTML = `
-            <div>Paused at ${Math.round((bushidoData.distance + this.offset) / 10) / 100} km (${Math.round((bushidoData.distance + this.offset) * 1000 / (this.smoothedSegments.length * 20)) / 10}%)</div>
+            <div>Paused at ${Math.round((bikeTrainerData.distance + this.offset) / 10) / 100} km (${Math.round((bikeTrainerData.distance + this.offset) * 1000 / (this.smoothedSegments.length * 20)) / 10}%)</div>
             <div style="display:flex"><div style="flex-grow:1">Speed:</div><div>${Math.round(avgSpeed * 10) / 10} km/h</div></div>
             <div style="display:flex"><div style="flex-grow:1">Power:</div><div>${Math.round(avgPower)} Watts</div></div>
             <div style="display:flex"><div style="flex-grow:1">Cadence:</div><div>${Math.round(avgCadence)}</div></div>
-            <div style="cursor: pointer; background: #267fca; color: white; text-align: center;" onclick="bushidoSimulator.export()">Download GPX</div>`;
+            <div style="cursor: pointer; background: #267fca; color: white; text-align: center;" onclick="bikeSimulator.export()">Download GPX</div>`;
     }
 
     public onResumed() {
@@ -340,21 +343,21 @@ export class BushidoSimulator {
     }
 
     public onDistanceUpdated(distance: number): void {
-        const { slope } = this.bushidoConnection.getData();
+        const { slope } = this.bikeTrainer.getData();
         const corrected_distance = distance + this.offset;
         const nextIndex = Math.ceil(corrected_distance / 20);
         const nextSegment = this.smoothedSegments[nextIndex];
 
         if (nextSegment !== undefined) {
-            const nextSlope = Math.max(Math.min(nextSegment.slope, slope + BushidoSimulator.MAX_SLOPE_CHANGE), slope - BushidoSimulator.MAX_SLOPE_CHANGE);
-            this.bushidoConnection.setSlope(nextSlope);
+            const nextSlope = Math.max(Math.min(nextSegment.slope, slope + BikeSimulator.MAX_SLOPE_CHANGE), slope - BikeSimulator.MAX_SLOPE_CHANGE);
+            this.bikeTrainer.setSlope(nextSlope);
             console.log("sent new slope of", nextSlope);
         }
 
-        if (!this.bushidoConnection.isPaused()) {
+        if (!this.bikeTrainer.isPaused()) {
             if (Math.ceil(corrected_distance / 20) > Math.ceil(this.progressedDistance / 20)) {
                 this.recording[Math.floor(corrected_distance / 20)] = {
-                    ...this.bushidoConnection.getData(),
+                    ...this.bikeTrainer.getData(),
                     distance: corrected_distance,
                     time: Date.now(),
                 };
@@ -507,10 +510,10 @@ export class BushidoSimulator {
     }
 
     private async renderLoop(): Promise<void> {
-        const bushidoData = this.bushidoConnection.getData();
-        const viewerDist = MathHelpers.interpolate(bushidoData.speed, 200, 300);
-        const viewerHeight = MathHelpers.interpolate(bushidoData.speed, 30, 100);
-        const meterPerSecond = bushidoData.speed / 3.6;
+        const bikeTrainerData = this.bikeTrainer.getData();
+        const viewerDist = MathHelpers.interpolate(bikeTrainerData.speed, 200, 300);
+        const viewerHeight = MathHelpers.interpolate(bikeTrainerData.speed, 30, 100);
+        const meterPerSecond = bikeTrainerData.speed / 3.6;
         const deltaT = performance.now() - this.lastRender;
         this.lastRender = performance.now();
         this.subprogress += deltaT / 1000 * meterPerSecond;
