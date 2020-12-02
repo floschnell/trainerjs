@@ -6,8 +6,8 @@
  * @author Florian Schnell
  */
 
-import { Message, BroadcastMessage, AntDriver } from './AntDriver';
-import { BikeTrainer, BikeTrainerData } from '../FitnessTrainer';
+import { Message, BroadcastMessage, AntDriver } from '../AntDriver';
+import { BikeTrainer, BikeTrainerData } from '../BikeTrainer';
 
 
 class BushidoResetHeadUnitMessage extends BroadcastMessage {
@@ -78,7 +78,7 @@ class BushidoHeadUnit {
 }
 
 
-export class BushidoDriver extends AntDriver implements BikeTrainer {
+export class BushidoTrainer extends AntDriver implements BikeTrainer {
     private data: BushidoData = new BushidoData();
     private is_paused: boolean = false;
     private last_button_code: number = -1;

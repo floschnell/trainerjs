@@ -3,7 +3,7 @@ import * as Chart from "chart.js";
 import * as gpxParser from "gpxparser";
 import { MathHelpers } from "./MathHelpers";
 import { ChartPoint } from "chart.js";
-import { BikeTrainer, BikeTrainerData } from "./FitnessTrainer";
+import { BikeTrainer, BikeTrainerData } from "./BikeTrainer";
 
 const CHART_METRICS = [
     {

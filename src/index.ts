@@ -1,2 +1,4 @@
 export { BikeSimulator } from "./BikeSimulator";
-export { BushidoDriver } from "./drivers/BushidoDriver";
+export { BushidoTrainer } from "./trainers/BushidoTrainer";
+export { TestTrainer } from "./trainers/TestTrainer";
+export { CesiumToken } from "./Cesium";

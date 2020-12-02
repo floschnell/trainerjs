@@ -31,32 +31,13 @@
             </div>
         </div>
         <script>
-            const bushido = new BushidoJS.BushidoDriver();
-            const test = false;
-            let distance = 0;
-            let speed = 20;
+            // Your access token can be found at: https://cesium.com/ion/tokens.
+            Cesium.Ion.defaultAccessToken = BushidoJS.CesiumToken;
 
-            if (test) {
-                bushido.getData = function () {
-                    return {
-                        speed: speed * 3.6,
-                        cadence: Math.random() * 100 % 60,
-                        power: Math.random() * 200,
-                        distance,
-                    };
-                }
-    
-                window.setInterval(() => {
-                    if (bushido.isConnected()) {
-                        distance += speed;
-                        bikeSimulator.onDistanceUpdated(distance);
-                        bikeSimulator.onDataUpdated(bushido.getData());
-                        speed = Math.abs(speed + Math.random() * 10 - 5);
-                    }
-                }, 1000);
-            }
+            const trainer = new BushidoJS.TestTrainer();
+            // const trainer = new BushidoJS.BushidoTrainer();
 
-            const bikeSimulator = new BushidoJS.BikeSimulator(bushido, {
+            const bikeSimulator = new BushidoJS.BikeSimulator(trainer, {
                 gpxFileInputId: "gpxFile",
                 overlayElementId: "overlay",
                 gameElementId: "game",
