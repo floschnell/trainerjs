@@ -1,8 +1,8 @@
 {
-  "name": "bushido-js",
+  "name": "trainerjs",
   "version": "1.0.0",
-  "description": "Bushido home trainer software",
-  "main": "simulator.ts",
+  "description": "Bike trainer simulator.",
+  "main": "index.ts",
   "dependencies": {
     "gpxparser": "^3.0.6"
   },

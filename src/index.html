@@ -1,6 +1,6 @@
 <html>
     <head>
-        <title>Bushido-JS</title>
+        <title>Trainer.js</title>
         <meta charset="utf-8">
 
         <script src="https://cesium.com/downloads/cesiumjs/releases/1.74/Build/Cesium/Cesium.js" charset="UTF-8"></script>
@@ -32,12 +32,12 @@
         </div>
         <script>
             // Your access token can be found at: https://cesium.com/ion/tokens.
-            Cesium.Ion.defaultAccessToken = BushidoJS.CesiumToken;
+            Cesium.Ion.defaultAccessToken = TrainerJS.CesiumToken;
 
-            const trainer = new BushidoJS.TestTrainer();
-            // const trainer = new BushidoJS.BushidoTrainer();
+            // const trainer = new TrainerJS.TestTrainer();
+            const trainer = new TrainerJS.BushidoTrainer();
 
-            const bikeSimulator = new BushidoJS.BikeSimulator(trainer, {
+            const bikeSimulator = new TrainerJS.BikeSimulator(trainer, {
                 gpxFileInputId: "gpxFile",
                 overlayElementId: "overlay",
                 gameElementId: "game",
