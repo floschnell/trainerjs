@@ -4,9 +4,9 @@ trainer.js is a Typescript application that lets you experience recorded gpx tra
 
 ![](demo.gif)
 
-The features of the webapp are:
+Features of the webapp are:
 - loading and smoothing of a GPX route
-- connecting to your Bushido trainer (via WebUSB)
+- connecting to your bike trainer (via WebUSB)
 - collecting metrics like power, speed, cadence and heart rate
 - adjusting slope depending on your current position on the GPX route
 - rendering your position into a 3d environment via CesiumJS
