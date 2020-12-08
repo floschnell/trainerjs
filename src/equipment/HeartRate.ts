@@ -16,8 +16,8 @@ export class HeartRateMonitor extends AntNode {
 
     processMessage(message: Message) {
         if (message instanceof BroadcastMessage) {
-            const content = message.getContent().slice(1);
-            console.log("computed HR:", content[7]);
+            const payload = message.getPayload();
+            console.log("computed HR:", payload[7]);
         }
     }
 }

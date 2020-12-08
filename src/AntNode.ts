@@ -87,52 +87,61 @@ interface ExtendedMessageParameters {
 }
 
 
-export class ExtendedMessage extends Message {
-
-    static createFlaggedFromMessage(message: Message, parameters: ExtendedMessageParameters): ExtendedMessage {
-        return ExtendedMessage.createFlagged(message.getId(), message.getContent(), parameters);
-    }
-
-    static createLegacyFromMessage(message: Message, parameters: ExtendedMessageParameters): ExtendedMessage {
-        return ExtendedMessage.createLegacy(message.getId(), message.getContent(), parameters);
-    }
-
-    static createFlagged(id: number, content: number[], parameters: ExtendedMessageParameters): ExtendedMessage {
-        const device_number_bytes = new ArrayBuffer(2);
-        new DataView(device_number_bytes).setInt16(parameters.device_number, 0);
-        return new ExtendedMessage(id, [...content, 0x80, device_number_bytes[0], device_number_bytes[1], parameters.device_type, parameters.transmission_type]);
-    }
-
-    static createLegacy(id: number, content: number[], parameters: ExtendedMessageParameters): ExtendedMessage {
-        const device_number_bytes = new ArrayBuffer(2);
-        new DataView(device_number_bytes).setInt16(parameters.device_number, 0);
-        return new ExtendedMessage(id, [content[0], device_number_bytes[0], device_number_bytes[1], parameters.device_type, parameters.transmission_type, ...content.slice(1)]);
-    }
+abstract class ExtendableMessage extends Message {
 
     constructor(id: number, content: number[]) {
         super(id, content);
     }
 
-    isFlagged(): boolean {
-        return this.content[this.content.length - 5] === 0x80;
+    isExtended(): boolean {
+        return this.content.length > 9;
+    }
+
+    hasChannelOutput(): boolean {
+        const flag_byte = this.content[9];
+        return (flag_byte & 0x80) === 0x80;
+    }
+
+    hasRSSI(): boolean {
+        const flag_byte = this.content[9];
+        return (flag_byte & 0x40) === 0x40;
+    }
+
+    hasTimestamp(): boolean {
+        const flag_byte = this.content[9];
+        return (flag_byte & 0x20) === 0x20;
     }
 
     getDeviceNumber(): number {
-        return this.isFlagged() ?
-            (this.content[this.content.length - 4] << 8) + this.content[this.content.length - 3] :
-            (this.content[1] << 8) + this.content[2];
+        return (this.content[10] << 8) + this.content[11];
     }
 
     getDeviceType(): number {
-        return this.isFlagged() ?
-            this.content[this.content.length - 2] :
-            this.content[3];
+        return this.content[12];
     }
 
     getTransType(): number {
-        return this.isFlagged() ?
-            this.content[this.content.length - 1] :
-            this.content[4];
+        return this.content[13];
+    }
+
+    getMeasurementType(): number {
+        const offset = this.hasChannelOutput() ? 4 : 0;
+        return this.content[10 + offset];
+    }
+
+    getRSSIValue(): number {
+        const offset = this.hasChannelOutput() ? 4 : 0;
+        return this.content[11 + offset];
+    }
+
+    getThresholdConfigurationValue(): number {
+        const offset = this.hasChannelOutput() ? 4 : 0;
+        return this.content[12 + offset];
+    }
+
+    getTimestamp(): number {
+        const offset = this.hasChannelOutput() ? this.hasRSSI() ? 7 : 4 : 0;
+        return (this.content[10 + offset] << 8) + this.content[11 + offset];
     }
 }
 
@@ -187,6 +196,30 @@ class StartupMessage extends Message {
 
     constructor(message: number[]) {
         super(StartupMessage.ID, [...message], false);
+    }
+
+    isPowerOnReset(): boolean {
+        return this.content[0] === 0x00;
+    }
+
+    isHardwareReset(): boolean {
+        return (this.content[0] & 0x01) === 0x01;
+    }
+
+    isWatchdogReset(): boolean {
+        return (this.content[0] & 0x02) === 0x02;
+    }
+
+    isCommandReset(): boolean {
+        return (this.content[0] & 0x10) === 0x10;
+    }
+
+    isSynchronousReset(): boolean {
+        return (this.content[0] & 0x20) === 0x20;
+    }
+
+    isSuspendReset(): boolean {
+        return (this.content[0] & 0x40) === 0x40;
     }
 }
 
@@ -278,7 +311,7 @@ class OpenChannelMessage extends Message {
 }
 
 
-export class BroadcastMessage extends Message {
+export class BroadcastMessage extends ExtendableMessage {
 
     static ID = 0x4e;
 
@@ -292,6 +325,14 @@ export class BroadcastMessage extends Message {
 
     isReply(message: Message): boolean {
         return message instanceof ChannelEvent && message.getEventCode() === EventCode.EVENT_TX;
+    }
+
+    getChannelNumber(): number {
+        return this.content[0];
+    }
+
+    getPayload(): number[] {
+        return this.content.slice(1);
     }
 }
 
@@ -514,6 +555,9 @@ export abstract class AntNode {
         switch (id) {
             case BroadcastMessage.ID:
                 return new BroadcastMessage(content);
+
+            case StartupMessage.ID:
+                return new StartupMessage(content);
             
             case ChannelEvent.ID:
                 const channel_event = new ChannelEvent(content);

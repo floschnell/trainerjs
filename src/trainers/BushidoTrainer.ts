@@ -6,7 +6,8 @@
  * @author Florian Schnell
  */
 
-import { Message, BroadcastMessage, AntNode, ChannelType, ExtendedMessage } from '../AntNode';
+import { HeartRateMonitor } from '../equipment/HeartRate';
+import { Message, BroadcastMessage, AntNode, ChannelType } from '../AntNode';
 import { BikeTrainer, BikeTrainerData } from '../BikeTrainer';
 
 
@@ -83,6 +84,7 @@ export class BushidoTrainer extends AntNode implements BikeTrainer {
     private is_paused: boolean = false;
     private last_button_code: number = -1;
     private last_button_timestamp: number = 0;
+    private hrm: HeartRateMonitor;
 
     public onPaused: () => void = null;
     public onResumed: () => void = null;
@@ -107,6 +109,13 @@ export class BushidoTrainer extends AntNode implements BikeTrainer {
                 },
             ],
         }, log);
+
+        this.hrm = new HeartRateMonitor();
+    }
+
+    public connect(): Promise<void> {
+        this.hrm.connect();
+        return super.connect();
     }
 
     public getData(): BushidoData {
@@ -172,7 +181,7 @@ export class BushidoTrainer extends AntNode implements BikeTrainer {
 
     protected processMessage(message: Message): void {
         if (message instanceof BroadcastMessage) {
-            const data = message.getContent().slice(1);
+            const data = message.getPayload();
             if (data[0] === 0xdd) {
                 if (data[1] === 0x01) {
                     this.data = {
