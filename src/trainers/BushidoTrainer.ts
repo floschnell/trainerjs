@@ -6,52 +6,52 @@
  * @author Florian Schnell
  */
 
-import { Message, BroadcastMessage, AntDriver } from '../AntDriver';
+import { Message, BroadcastMessage, AntNode, ChannelType, ExtendedMessage } from '../AntNode';
 import { BikeTrainer, BikeTrainerData } from '../BikeTrainer';
 
 
 class BushidoResetHeadUnitMessage extends BroadcastMessage {
-    constructor() {
-        super([0xac, 0x03, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    constructor(channel_number: number = 0x00) {
+        super([channel_number, 0xac, 0x03, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]);
     }
 }
 
 
 class BushidoContinueMessage extends BroadcastMessage {
-    constructor() {
-        super([0xac, 0x03, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    constructor(channel_number: number = 0x00) {
+        super([channel_number, 0xac, 0x03, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]);
     }
 }
 
 
 class BushidoStartCyclingMessage extends BroadcastMessage {
-    constructor() {
-        super([0xac, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    constructor(channel_number: number = 0x00) {
+        super([channel_number, 0xac, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00]);
     }
 }
 
 
 class BushidoInitPCConnectionMessage extends BroadcastMessage {
-    constructor() {
-        super([0xac, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    constructor(channel_number: number = 0x00) {
+        super([channel_number, 0xac, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]);
     }
 }
 
 
 class BushidoClosePCConnectionMessage extends BroadcastMessage {
-    constructor() {
-        super([0xac, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    constructor(channel_number: number = 0x00) {
+        super([channel_number, 0xac, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
     }
 }
 
 
 class BushidoDataMessage extends BroadcastMessage {
-    constructor(slope: number, weight: number) {
+    constructor(slope: number, weight: number, channel_number: number = 0x00) {
         const corrected_slope = Math.max(-50, Math.min(200, Math.round(slope * 10.0)));
         if (corrected_slope < 0) {
-            super([0xdc, 0x01, 0x00, 0xff, 256 + corrected_slope, weight, 0x00, 0x00]);
+            super([channel_number, 0xdc, 0x01, 0x00, 0xff, 256 + corrected_slope, weight, 0x00, 0x00]);
         } else {
-            super([0xdc, 0x01, 0x00, 0x00, corrected_slope, weight, 0x00, 0x00]);
+            super([channel_number, 0xdc, 0x01, 0x00, 0x00, corrected_slope, weight, 0x00, 0x00]);
         }
     }
 }
@@ -78,7 +78,7 @@ class BushidoHeadUnit {
 }
 
 
-export class BushidoTrainer extends AntDriver implements BikeTrainer {
+export class BushidoTrainer extends AntNode implements BikeTrainer {
     private data: BushidoData = new BushidoData();
     private is_paused: boolean = false;
     private last_button_code: number = -1;
@@ -97,11 +97,15 @@ export class BushidoTrainer extends AntDriver implements BikeTrainer {
 
     constructor(log = null) {
         super({
-            network_key: [0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00],
-            channel_type: 0x00,
-            channel_period: 4096,
-            device_type: 0x52,
-            rf_frequency: 60,
+            channels: [
+                {
+                    device_type: 0x52,
+                    period: 4096,
+                    rf_frequency: 60,
+                    number: 0,
+                    type: ChannelType.BIDIRECTIONAL_RECEIVE,
+                },
+            ],
         }, log);
     }
 
@@ -167,56 +171,57 @@ export class BushidoTrainer extends AntDriver implements BikeTrainer {
     }
 
     protected processMessage(message: Message): void {
-        const data = message.getContent();
-        data.shift();
-        if (data[0] === 0xdd) {
-            if (data[1] === 0x01) {
-                this.data = {
-                    ...this.data,
-                    speed: ((data[2] << 8) + data[3]) / 10.0,
-                    power: (data[4] << 8) + data[5],
-                    cadence: data[6],
-                };
-                this.log_info("received speed", this.data.speed, ", power", this.data.power, "and cadence", this.data.cadence);
-                if (this.onDataUpdated) this.onDataUpdated(this.data);
-            } else if (data[1] === 0x02) {
-                const old_distance = this.data.distance;
-                this.data = {
-                    ...this.data,
-                    distance: (((data[2] << 24) + data[3] << 16) + data[4] << 8) + data[5],
-                    heart_rate: data[6],
+        if (message instanceof BroadcastMessage) {
+            const data = message.getContent().slice(1);
+            if (data[0] === 0xdd) {
+                if (data[1] === 0x01) {
+                    this.data = {
+                        ...this.data,
+                        speed: ((data[2] << 8) + data[3]) / 10.0,
+                        power: (data[4] << 8) + data[5],
+                        cadence: data[6],
+                    };
+                    this.log_info("received speed", this.data.speed, ", power", this.data.power, "and cadence", this.data.cadence);
+                    if (this.onDataUpdated) this.onDataUpdated(this.data);
+                } else if (data[1] === 0x02) {
+                    const old_distance = this.data.distance;
+                    this.data = {
+                        ...this.data,
+                        distance: (((data[2] << 24) + data[3] << 16) + data[4] << 8) + data[5],
+                        heart_rate: data[6],
+                    }
+                    this.log_info("received distance", this.data.distance, "and heart rate", this.data.heart_rate);
+                    if (this.onDataUpdated) this.onDataUpdated(this.data);
+                    if (old_distance !== this.data.distance && this.onDistanceUpdated) this.onDistanceUpdated(this.data.distance);
+                } else if (data[1] === 0x03) {
+                    this.data = {
+                        ...this.data,
+                        break_temp: data[4],
+                    };
+                    this.log_info("received break temp:", this.data.break_temp);
+                    if (this.onDataUpdated) this.onDataUpdated(this.data);
+                } else if (data[1] === 0x10) {
+                    this.processButtonPress(data[2]);
                 }
-                this.log_info("received distance", this.data.distance, "and heart rate", this.data.heart_rate);
-                if (this.onDataUpdated) this.onDataUpdated(this.data);
-                if (old_distance !== this.data.distance && this.onDistanceUpdated) this.onDistanceUpdated(this.data.distance);
-            } else if (data[1] === 0x03) {
-                this.data = {
-                    ...this.data,
-                    break_temp: data[4],
-                };
-                this.log_info("received break temp:", this.data.break_temp);
-                if (this.onDataUpdated) this.onDataUpdated(this.data);
-            } else if (data[1] === 0x10) {
-                this.processButtonPress(data[2]);
-            }
-        } else if (data[0] === 0xad) {
-            if (data[1] === 0x01 && data[2] === 0x02) {
-                this.is_paused = false;
-                if (this.onResumed) this.onResumed();
-                this.log_info("sending slope of:", this.data.slope);
-                this.sendData();
-            } else if (data[1] === 0x01 && data[2] === 0x03) {
-                this.is_paused = true;
-                this.data = {
-                    ...this.data,
-                    power: 0,
-                    cadence: 0,
-                    speed: 0,
-                };
-                this.log_info("pause detected, sending continue message ...");
-                if (this.onDataUpdated) this.onDataUpdated(this.data);
-                if (this.onPaused) this.onPaused();
-                this.continue();
+            } else if (data[0] === 0xad) {
+                if (data[1] === 0x01 && data[2] === 0x02) {
+                    this.is_paused = false;
+                    if (this.onResumed) this.onResumed();
+                    this.log_info("sending slope of:", this.data.slope);
+                    this.sendData();
+                } else if (data[1] === 0x01 && data[2] === 0x03) {
+                    this.is_paused = true;
+                    this.data = {
+                        ...this.data,
+                        power: 0,
+                        cadence: 0,
+                        speed: 0,
+                    };
+                    this.log_info("pause detected, sending continue message ...");
+                    if (this.onDataUpdated) this.onDataUpdated(this.data);
+                    if (this.onPaused) this.onPaused();
+                    this.continue();
+                }
             }
         }
     }

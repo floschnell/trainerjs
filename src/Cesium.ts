@@ -1,2 +1,2 @@
 // Your access token can be found at: https://cesium.com/ion/tokens.
-export const CesiumToken = "<insert-token>";
+export const CesiumToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkYTAxNzM3Ni05Mjc4LTQ2YmQtODgzZC03Y2ZiMjE2ODJjNTciLCJpZCI6MzYxNjMsImlhdCI6MTYwMzEwNjc4Nn0.vnFuxbMupI2GP47atXH64OI-WMZ8fUZFhjAYnlEDeFE";
