@@ -1,4 +1,4 @@
-import { BroadcastMessage, ChannelEvent, EventCode, Message, MessageChecksumError, StartupMessage } from "./Messages";
+import { buildMessage, Message, MessageChecksumError } from "./Messages";
 
 export interface Driver {
     sendMessage(message: Message, callback?: () => void): Promise<void>;
@@ -75,6 +75,7 @@ export class UsbDriver implements Driver {
 
         // retry send every second
         const interval_handle = setInterval(async () => {
+            console.warn("retry sending of message:", message_bytes);
             await this.device.transferOut(1, message_bytes);
         }, 1000);
 
@@ -102,39 +103,12 @@ export class UsbDriver implements Driver {
                 const message_id = message_body[0];
                 const message_content = [...message_body.slice(1, message_size + 1)];
                 const message_checksum = message_body[message_size + 1];
-                in_message = this.buildMessage(message_id, message_content);
-
-                if (in_message.checksum() !== message_checksum) {
-                    throw new MessageChecksumError();
-                }
+                in_message = buildMessage(message_id, message_content, message_checksum);
             } else {
                 console.warn("dropping byte:", in_byte);
             }
         } while (in_message === null);
 
         return in_message;
-    }
-
-    private buildMessage(id: number, content: number[]): Message {
-        switch (id) {
-            case BroadcastMessage.ID:
-                return new BroadcastMessage(content);
-
-            case StartupMessage.ID:
-                return new StartupMessage(content);
-            
-            case ChannelEvent.ID:
-                const channel_event = new ChannelEvent(content);
-                if (channel_event.getEventCode() != EventCode.EVENT_TX &&
-                    channel_event.getEventCode() != EventCode.RESPONSE_NO_ERROR) {
-                    console.warn("received channel event with code", channel_event.getEventCodeAsString());
-                }
-                return channel_event;
-
-            default:
-                const message = new Message(id, content);
-                console.warn("parsed message with unknown id", id, "and content", content);
-                return message;
-        }
     }
 }

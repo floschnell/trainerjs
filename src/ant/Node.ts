@@ -7,7 +7,7 @@
  */
 
 import { Driver } from "./Driver";
-import { Message, ResetMessage, SetNetworkKeyMessage, AssignChannelMessage, SetChannelIdMessage, SetChannelRfFrequencyMessage, SetChannelPeriodMessage, OpenRxScanModeMessage, OpenChannelMessage, MessageChecksumError, BroadcastMessage, StartupMessage, ChannelEvent, EventCode } from "./Messages";
+import { Message, ResetMessage, SetNetworkKeyMessage, AssignChannelMessage, SetChannelIdMessage, SetChannelRfFrequencyMessage, SetChannelPeriodMessage, OpenRxScanModeMessage, OpenChannelMessage, MessageChecksumError, BroadcastMessage, StartupMessage, ChannelEvent, EventCode, ExtendedAssignmentOptions, RequestMessage, ChannelStatusMessage, ChannelStatus } from "./Messages";
 import { ChannelType, NetworkKey } from "./Network";
 
 
@@ -17,6 +17,7 @@ interface QueuedMessage {
 }
 
 export interface NodeConfig {
+    reset?: boolean;
     networks: NetworkConfig[];
     channels: ChannelConfig[];
 };
@@ -36,13 +37,14 @@ export interface ChannelConfig {
     scan?: boolean;
     device_type: number;
     network_number: number;
+    assignment_options?: ExtendedAssignmentOptions;
 }
 
 
-export class DriverNotOpenError extends Error {};
+export class DriverNotOpenError extends Error { };
 
 
-export class NotConnectedError extends Error {};
+export class NotConnectedError extends Error { };
 
 
 export abstract class Node {
@@ -56,6 +58,10 @@ export abstract class Node {
         this.log = log;
         this.configuration = configuration;
         this.driver = driver;
+
+        if (this.configuration.reset === undefined) {
+            this.configuration.reset = true;
+        }
     }
 
     public isConnected(): boolean {
@@ -107,8 +113,11 @@ export abstract class Node {
     protected abstract processMessage(in_message: Message): void;
 
     private async initializeANTConnection(): Promise<void> {
-        await this.driver.sendMessage(new ResetMessage());
-        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        if (this.configuration.reset) {
+            await this.driver.sendMessage(new ResetMessage());
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        }
 
         for (const network_config of this.configuration.networks) {
             await this.driver.sendMessage(new SetNetworkKeyMessage(network_config.key, network_config.number));
@@ -116,7 +125,7 @@ export abstract class Node {
 
         for (const channel_config of this.configuration.channels) {
             this.log_info("opening channel", channel_config.number);
-            await this.driver.sendMessage(new AssignChannelMessage(channel_config.type, channel_config.number, channel_config.network_number));
+            await this.driver.sendMessage(new AssignChannelMessage(channel_config.type, channel_config.number, channel_config.network_number, channel_config.assignment_options));
             await this.driver.sendMessage(new SetChannelIdMessage(channel_config.device_type, channel_config.number));
             await this.driver.sendMessage(new SetChannelRfFrequencyMessage(channel_config.rf_frequency, channel_config.number));
             await this.driver.sendMessage(new SetChannelPeriodMessage(channel_config.period, channel_config.number));

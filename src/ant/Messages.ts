@@ -1,8 +1,18 @@
+import { ChannelType } from "./Network";
+
 export class Message {
+    private static checksumFunction = (prev: number, cur: number) => prev ^ cur;
+    
     static SYNC_BYTE = 0xa4;
+
+    static checksum(id: number, content: number[]): number {
+        return [Message.SYNC_BYTE, content.length, id, ...content]
+            .reduce(Message.checksumFunction, 0);
+    }
+
     private id: number;
-    protected content: number[];
     private wait_for_reply: boolean;
+    protected content: number[];
 
     constructor(id: number, content: number[], wait_for_reply = true) {
         this.id = id;
@@ -21,7 +31,7 @@ export class Message {
     checksum(): number {
         return this.header()
             .concat(this.content)
-            .reduce((prev, cur) => prev ^ cur, 0);
+            .reduce(Message.checksumFunction, 0);
     }
 
     encode(): ArrayBuffer {
@@ -210,12 +220,35 @@ export class SetNetworkKeyMessage extends Message {
 }
 
 
+export interface ExtendedAssignmentOptions {
+    background_scanning_enable?: boolean;
+    frequency_agility_enable?: boolean;
+    fast_channel_init_enable?: boolean;
+    asynchronous_transmission_enable?: boolean;
+}
+
+
 export class AssignChannelMessage extends Message {
 
     static ID = 0x42;
 
-    constructor(type: number, channel_number: number, network_number: number) {
-        super(AssignChannelMessage.ID, [channel_number, type, network_number]);
+    constructor(type: number, channel_number: number, network_number: number, options: ExtendedAssignmentOptions = {
+        asynchronous_transmission_enable: false,
+        background_scanning_enable: false,
+        fast_channel_init_enable: false,
+        frequency_agility_enable: false,
+    }) {
+        const extended_assignment_byte = 0x00 |
+            (options.background_scanning_enable ? 0x01 : 0x00) |
+            (options.frequency_agility_enable ? 0x04 : 0x00) |
+            (options.fast_channel_init_enable ? 0x10 : 0x00) |
+            (options.asynchronous_transmission_enable ? 0x20 : 0x00);
+
+        console.log("ext ass. byte", extended_assignment_byte);
+
+        super(AssignChannelMessage.ID, extended_assignment_byte === 0x00 ?
+            [channel_number, type, network_number] :
+            [channel_number, type, network_number, extended_assignment_byte]);
     }
 }
 
@@ -299,6 +332,41 @@ export class BroadcastMessage extends ExtendableMessage {
 }
 
 
+export enum ChannelStatus {
+    UNASSIGNED = 0,
+    ASSIGNED = 1,
+    SEARCHING = 2,
+    TRACKING = 3,
+}
+
+
+export class ChannelStatusMessage extends Message {
+    static ID = 0x52;
+
+    constructor(content: number[]) {
+        super(ChannelStatusMessage.ID, content, false);
+    }
+
+    getChannelNumber(): number {
+        return this.content[0];
+    }
+
+    getStatus(): ChannelStatus {
+        return this.content[1] & 0x03;
+    }
+}
+
+
+export class RequestMessage extends Message {
+
+    static ID = 0x4d;
+
+    constructor(channel_number: number, message_id: number) {
+        super(RequestMessage.ID, [channel_number, message_id]);
+    }
+}
+
+
 export class ChannelEvent extends Message {
 
     static ID = 0x40;
@@ -310,7 +378,7 @@ export class ChannelEvent extends Message {
     constructor(content: number[]) {
         super(ChannelEvent.ID, content);
     }
-    
+
     getEventCode(): EventCode {
         return this.getContent()[2] as EventCode;
     }
@@ -329,5 +397,33 @@ export class ChannelEvent extends Message {
 
     isResponse(): boolean {
         return this.getContent()[1] !== 1;
+    }
+}
+
+export function buildMessage(id: number, content: number[], checksum: number): Message {
+    if (Message.checksum(id, content) !== checksum) throw new MessageChecksumError();
+
+    switch (id) {
+        case BroadcastMessage.ID:
+            return new BroadcastMessage(content);
+
+        case StartupMessage.ID:
+            return new StartupMessage(content);
+
+        case ChannelStatusMessage.ID:
+            return new ChannelStatusMessage(content);
+
+        case ChannelEvent.ID:
+            const channel_event = new ChannelEvent(content);
+            if (channel_event.getEventCode() != EventCode.EVENT_TX &&
+                channel_event.getEventCode() != EventCode.RESPONSE_NO_ERROR) {
+                console.warn("received event with code", channel_event.getEventCodeAsString(), "on channel", channel_event.getChannelNumber());
+            }
+            return channel_event;
+
+        default:
+            const message = new Message(id, content);
+            console.warn("parsed message with unknown id", id, "and content", content);
+            return message;
     }
 }
