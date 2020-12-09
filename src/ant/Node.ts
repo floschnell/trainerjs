@@ -1,11 +1,3 @@
-/**
- * ANT+ WebUSB driver
- * Very basic functionality (no extended message support, no burst support ...)
- * Tested with the CYCPLUS Ant+ Dongle: https://www.cycplus.com/products/ant-usb-stick-u1
- * 
- * @author Florian Schnell
- */
-
 import { Driver } from "./Driver";
 import { Message, ResetMessage, SetNetworkKeyMessage, AssignChannelMessage, SetChannelIdMessage, SetChannelRfFrequencyMessage, SetChannelPeriodMessage, OpenRxScanModeMessage, OpenChannelMessage, MessageChecksumError, BroadcastMessage, StartupMessage, ChannelEvent, EventCode, ExtendedAssignmentOptions, RequestMessage, ChannelStatusMessage, ChannelStatus } from "./Messages";
 import { ChannelType, NetworkKey } from "./Network";

@@ -1,5 +1,3 @@
-import { ChannelType } from "./Network";
-
 export class Message {
     private static checksumFunction = (prev: number, cur: number) => prev ^ cur;
     
@@ -341,6 +339,7 @@ export enum ChannelStatus {
 
 
 export class ChannelStatusMessage extends Message {
+
     static ID = 0x52;
 
     constructor(content: number[]) {
@@ -357,12 +356,53 @@ export class ChannelStatusMessage extends Message {
 }
 
 
+export class ChannelIdMessage extends Message {
+
+    static ID = 0x51;
+
+    constructor(content: number[]) {
+        super(ChannelIdMessage.ID, content);
+    }
+
+    getChannelNumber(): number {
+        return this.content[0];
+    }
+
+    getDeviceNumber(): number {
+        return (this.content[1] << 8) + this.content[2];
+    }
+
+    getDeviceTypeId(): number {
+        return this.content[3];
+    }
+
+    getTransType(): number {
+        return this.content[4];
+    }
+}
+
+
+declare type RequestedMessageCallback = (reply: Message) => void;
+
+
 export class RequestMessage extends Message {
 
     static ID = 0x4d;
 
-    constructor(channel_number: number, message_id: number) {
+    private expected_message_id: number;
+    private callback: RequestedMessageCallback;
+
+    constructor(channel_number: number, message_id: number, callback: RequestedMessageCallback) {
         super(RequestMessage.ID, [channel_number, message_id]);
+        this.expected_message_id = message_id;
+        this.callback = callback;
+    }
+
+    isReply(message: Message): boolean {
+        if (message.getId() === this.expected_message_id) {
+            this.callback(message);
+            return true;
+        }
     }
 }
 
@@ -412,6 +452,9 @@ export function buildMessage(id: number, content: number[], checksum: number): M
 
         case ChannelStatusMessage.ID:
             return new ChannelStatusMessage(content);
+
+        case ChannelIdMessage.ID:
+            return new ChannelIdMessage(content);
 
         case ChannelEvent.ID:
             const channel_event = new ChannelEvent(content);

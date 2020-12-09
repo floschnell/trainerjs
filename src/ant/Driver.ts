@@ -1,4 +1,4 @@
-import { buildMessage, Message, MessageChecksumError } from "./Messages";
+import { buildMessage, Message } from "./Messages";
 
 export interface Driver {
     sendMessage(message: Message, callback?: () => void): Promise<void>;

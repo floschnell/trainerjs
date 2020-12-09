@@ -100,12 +100,7 @@ export class BushidoTrainer extends Node implements BikeTrainer {
 
     constructor(log = null) {
         super(new UsbDriver(), {
-            networks: [
-                {
-                    key: NetworkKeys.DefaultKey,
-                    number: 0,
-                },
-            ],
+            networks: [],
             channels: [
                 {
                     device_type: 0x52,
