@@ -6,9 +6,11 @@
  * @author Florian Schnell
  */
 
-import { HeartRateMonitor } from '../equipment/HeartRate';
-import { Message, BroadcastMessage, AntNode, ChannelType } from '../AntNode';
+import { UsbDriver } from '../ant/Driver';
+import { BroadcastMessage, Message } from '../ant/Messages';
+import { Node } from '../ant/Node';
 import { BikeTrainer, BikeTrainerData } from '../BikeTrainer';
+import { NetworkKeys, ChannelType } from "../ant/Network";
 
 
 class BushidoResetHeadUnitMessage extends BroadcastMessage {
@@ -79,12 +81,11 @@ class BushidoHeadUnit {
 }
 
 
-export class BushidoTrainer extends AntNode implements BikeTrainer {
+export class BushidoTrainer extends Node implements BikeTrainer {
     private data: BushidoData = new BushidoData();
     private is_paused: boolean = false;
     private last_button_code: number = -1;
     private last_button_timestamp: number = 0;
-    private hrm: HeartRateMonitor;
 
     public onPaused: () => void = null;
     public onResumed: () => void = null;
@@ -98,24 +99,24 @@ export class BushidoTrainer extends AntNode implements BikeTrainer {
     public onButtonRight: () => void = null;
 
     constructor(log = null) {
-        super({
+        super(new UsbDriver(), {
+            networks: [
+                {
+                    key: NetworkKeys.DefaultKey,
+                    number: 0,
+                },
+            ],
             channels: [
                 {
                     device_type: 0x52,
+                    number: 0,
                     period: 4096,
                     rf_frequency: 60,
-                    number: 0,
                     type: ChannelType.BIDIRECTIONAL_RECEIVE,
+                    network_number: 0,
                 },
             ],
         }, log);
-
-        this.hrm = new HeartRateMonitor();
-    }
-
-    public connect(): Promise<void> {
-        this.hrm.connect();
-        return super.connect();
     }
 
     public getData(): BushidoData {
@@ -182,6 +183,7 @@ export class BushidoTrainer extends AntNode implements BikeTrainer {
     protected processMessage(message: Message): void {
         if (message instanceof BroadcastMessage) {
             const data = message.getPayload();
+
             if (data[0] === 0xdd) {
                 if (data[1] === 0x01) {
                     this.data = {
