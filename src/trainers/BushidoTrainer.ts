@@ -85,6 +85,7 @@ export class BushidoTrainer extends Node implements BikeTrainer {
     private is_paused: boolean = false;
     private last_button_code: number = -1;
     private last_button_timestamp: number = 0;
+    private last_heart_rate: number = 0;
 
     public onPaused: () => void = null;
     public onResumed: () => void = null;
@@ -202,7 +203,8 @@ export class BushidoTrainer extends Node implements BikeTrainer {
     }
 
     private processHeartRateMessage(message: BroadcastMessage) {
-        console.log("HR:", message.getPayload()[7]);
+        this.last_heart_rate = message.getPayload()[7];
+        console.log("computed HR:", this.last_heart_rate);
     }
 
     private processBushidoMessage(message: BroadcastMessage) {
@@ -222,7 +224,7 @@ export class BushidoTrainer extends Node implements BikeTrainer {
                 this.data = {
                     ...this.data,
                     distance: (((data[2] << 24) + data[3] << 16) + data[4] << 8) + data[5],
-                    heart_rate: data[6],
+                    heart_rate: data[6] === 0 ? this.last_heart_rate : data[6],
                 }
                 this.log_info("received distance", this.data.distance, "and heart rate", this.data.heart_rate);
                 if (this.onDataUpdated) this.onDataUpdated(this.data);
