@@ -21,6 +21,11 @@ const CHART_METRICS = [
         color: "red",
         datasetIndex: 3,
     },
+    {
+        id: "heart_rate",
+        color: "purple",
+        datasetIndex: 4,
+    },
 ];
 
 
@@ -166,6 +171,13 @@ export class BikeSimulator {
                     label: "Power (Watts)",
                     data: [],
                     borderColor: 'red',
+                    fill: false,
+                    yAxisID: 'y-axis-metrics',
+                },
+                {
+                    label: "Heart Rate (bpm)",
+                    data: [],
+                    borderColor: 'purple',
                     fill: false,
                     yAxisID: 'y-axis-metrics',
                 }],
