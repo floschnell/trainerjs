@@ -1,6 +1,5 @@
 /**
- * Bushido WebUSB driver
- * Compatible with proprietary ANT+ protocol of the Tacx Bushido t1980.
+ * Tacx Bushido (t1980) driver
  * Tested with the CYCPLUS Ant+ Dongle: https://www.cycplus.com/products/ant-usb-stick-u1
  * 
  * @author Florian Schnell
@@ -100,8 +99,21 @@ export class BushidoTrainer extends Node implements BikeTrainer {
 
     constructor(log = null) {
         super(new UsbDriver(), {
-            networks: [],
+            networks: [
+                {
+                    key: NetworkKeys.AntPlusKey,
+                    number: 1,
+                },
+            ],
             channels: [
+                {
+                    device_type: 0x78,
+                    number: 1,
+                    period: 8070,
+                    rf_frequency: 57,
+                    type: ChannelType.UNIDIRECTIONAL_RECEIVE,
+                    network_number: 1,
+                },
                 {
                     device_type: 0x52,
                     number: 0,
@@ -109,6 +121,7 @@ export class BushidoTrainer extends Node implements BikeTrainer {
                     rf_frequency: 60,
                     type: ChannelType.BIDIRECTIONAL_RECEIVE,
                     network_number: 0,
+                    wait_until_tracking: true,
                 },
             ],
         }, log);
@@ -177,57 +190,71 @@ export class BushidoTrainer extends Node implements BikeTrainer {
 
     protected processMessage(message: Message): void {
         if (message instanceof BroadcastMessage) {
-            const data = message.getPayload();
+            switch (message.getChannelNumber()) {
+                case 0:
+                    return this.processBushidoMessage(message);
+                case 1:
+                    return this.processHeartRateMessage(message);
+                default:
+                    console.warn("received message on unknown channel:", message.getChannelNumber());
+            }
+        }
+    }
 
-            if (data[0] === 0xdd) {
-                if (data[1] === 0x01) {
-                    this.data = {
-                        ...this.data,
-                        speed: ((data[2] << 8) + data[3]) / 10.0,
-                        power: (data[4] << 8) + data[5],
-                        cadence: data[6],
-                    };
-                    this.log_info("received speed", this.data.speed, ", power", this.data.power, "and cadence", this.data.cadence);
-                    if (this.onDataUpdated) this.onDataUpdated(this.data);
-                } else if (data[1] === 0x02) {
-                    const old_distance = this.data.distance;
-                    this.data = {
-                        ...this.data,
-                        distance: (((data[2] << 24) + data[3] << 16) + data[4] << 8) + data[5],
-                        heart_rate: data[6],
-                    }
-                    this.log_info("received distance", this.data.distance, "and heart rate", this.data.heart_rate);
-                    if (this.onDataUpdated) this.onDataUpdated(this.data);
-                    if (old_distance !== this.data.distance && this.onDistanceUpdated) this.onDistanceUpdated(this.data.distance);
-                } else if (data[1] === 0x03) {
-                    this.data = {
-                        ...this.data,
-                        break_temp: data[4],
-                    };
-                    this.log_info("received break temp:", this.data.break_temp);
-                    if (this.onDataUpdated) this.onDataUpdated(this.data);
-                } else if (data[1] === 0x10) {
-                    this.processButtonPress(data[2]);
+    private processHeartRateMessage(message: BroadcastMessage) {
+        console.log("HR:", message.getPayload()[7]);
+    }
+
+    private processBushidoMessage(message: BroadcastMessage) {
+        const data = message.getPayload();
+        if (data[0] === 0xdd) {
+            if (data[1] === 0x01) {
+                this.data = {
+                    ...this.data,
+                    speed: ((data[2] << 8) + data[3]) / 10.0,
+                    power: (data[4] << 8) + data[5],
+                    cadence: data[6],
+                };
+                this.log_info("received speed", this.data.speed, ", power", this.data.power, "and cadence", this.data.cadence);
+                if (this.onDataUpdated) this.onDataUpdated(this.data);
+            } else if (data[1] === 0x02) {
+                const old_distance = this.data.distance;
+                this.data = {
+                    ...this.data,
+                    distance: (((data[2] << 24) + data[3] << 16) + data[4] << 8) + data[5],
+                    heart_rate: data[6],
                 }
-            } else if (data[0] === 0xad) {
-                if (data[1] === 0x01 && data[2] === 0x02) {
-                    this.is_paused = false;
-                    if (this.onResumed) this.onResumed();
-                    this.log_info("sending slope of:", this.data.slope);
-                    this.sendData();
-                } else if (data[1] === 0x01 && data[2] === 0x03) {
-                    this.is_paused = true;
-                    this.data = {
-                        ...this.data,
-                        power: 0,
-                        cadence: 0,
-                        speed: 0,
-                    };
-                    this.log_info("pause detected, sending continue message ...");
-                    if (this.onDataUpdated) this.onDataUpdated(this.data);
-                    if (this.onPaused) this.onPaused();
-                    this.continue();
-                }
+                this.log_info("received distance", this.data.distance, "and heart rate", this.data.heart_rate);
+                if (this.onDataUpdated) this.onDataUpdated(this.data);
+                if (old_distance !== this.data.distance && this.onDistanceUpdated) this.onDistanceUpdated(this.data.distance);
+            } else if (data[1] === 0x03) {
+                this.data = {
+                    ...this.data,
+                    break_temp: data[4],
+                };
+                this.log_info("received break temp:", this.data.break_temp);
+                if (this.onDataUpdated) this.onDataUpdated(this.data);
+            } else if (data[1] === 0x10) {
+                this.processButtonPress(data[2]);
+            }
+        } else if (data[0] === 0xad) {
+            if (data[1] === 0x01 && data[2] === 0x02) {
+                this.is_paused = false;
+                if (this.onResumed) this.onResumed();
+                this.log_info("sending slope of:", this.data.slope);
+                this.sendData();
+            } else if (data[1] === 0x01 && data[2] === 0x03) {
+                this.is_paused = true;
+                this.data = {
+                    ...this.data,
+                    power: 0,
+                    cadence: 0,
+                    speed: 0,
+                };
+                this.log_info("pause detected, sending continue message ...");
+                if (this.onDataUpdated) this.onDataUpdated(this.data);
+                if (this.onPaused) this.onPaused();
+                this.continue();
             }
         }
     }

@@ -261,6 +261,28 @@ export class SetChannelIdMessage extends Message {
 }
 
 
+export class SetChannelHighPrioritySearchTimeoutMessage extends Message {
+
+    static ID = 0x44;
+
+    constructor(channel_number: number, timeout_in_seconds: number) {
+        const timeout_counts = Math.min(255, Math.max(0, Math.round(timeout_in_seconds / 2.5)));
+        super(SetChannelHighPrioritySearchTimeoutMessage.ID, [channel_number, timeout_counts])
+    }
+}
+
+
+export class SetChannelLowPrioritySearchTimeoutMessage extends Message {
+
+    static ID = 0x63;
+
+    constructor(channel_number: number, timeout_in_seconds: number) {
+        const timeout_counts = Math.min(255, Math.max(0, Math.round(timeout_in_seconds / 2.5)));
+        super(SetChannelLowPrioritySearchTimeoutMessage.ID, [channel_number, timeout_counts])
+    }
+}
+
+
 export class SetChannelPeriodMessage extends Message {
 
     static ID = 0x43;

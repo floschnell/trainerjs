@@ -1,7 +1,7 @@
 import { buildMessage, Message } from "./Messages";
 
 export interface Driver {
-    sendMessage(message: Message, callback?: () => void): Promise<void>;
+    sendMessage(message: Message): Promise<void>;
     receiveMessage(): Promise<Message>;
     open(): Promise<void>;
     close(): Promise<void>;
@@ -21,18 +21,18 @@ interface USBDevice {
 };
 
 
-class NotConnectedError extends Error {};
+class NotOpenError extends Error {};
 
 
-class AlreadyConnectedError extends Error {};
+class AlreadyOpenError extends Error {};
 
 
 export class UsbDriver implements Driver {
     private device: USBDevice;
-    private connected: boolean;
+    private is_open: boolean;
 
     async open(): Promise<void> {
-        if (this.connected) throw new AlreadyConnectedError();
+        if (this.is_open) throw new AlreadyOpenError();
 
         try {
             // @ts-ignore
@@ -49,50 +49,33 @@ export class UsbDriver implements Driver {
     
             await this.device.claimInterface(0);
 
-            this.connected = true;
+            this.is_open = true;
         } catch (e) {
-            this.connected = false;
+            this.is_open = false;
         }
     }
 
     isOpen(): boolean {
-        return this.connected;
+        return this.is_open;
     }
 
     async close(): Promise<void> {
-        if (!this.connected) throw new NotConnectedError();
+        if (!this.is_open) throw new NotOpenError();
 
         await this.device.releaseInterface(0);
         await this.device.close();
-        this.connected = false;
+        this.is_open = false;
     }
 
-    async sendMessage(out_message: Message, callback: () => void = null): Promise<void> {
-        if (!this.connected) throw new NotConnectedError();
+    async sendMessage(out_message: Message): Promise<void> {
+        if (!this.is_open) throw new NotOpenError();
 
         const message_bytes = out_message.encode();
         await this.device.transferOut(1, message_bytes);
-
-        // retry send every second
-        const interval_handle = setInterval(async () => {
-            console.warn("retry sending of message:", message_bytes);
-            await this.device.transferOut(1, message_bytes);
-        }, 1000);
-
-        // wait for ACK
-        while (out_message.waitForReply()) {
-            const in_message = await this.receiveMessage();
-            if (out_message.isReply(in_message)) {
-                break;
-            }
-        }
-
-        clearInterval(interval_handle);
-        if (callback !== null) callback();
     }
 
     async receiveMessage(): Promise<Message> {
-        if (!this.connected) throw new NotConnectedError();
+        if (!this.is_open) throw new NotOpenError();
 
         let in_message: Message = null;
         do {

@@ -1,11 +1,15 @@
 import { Driver } from "./Driver";
-import { Message, ResetMessage, SetNetworkKeyMessage, AssignChannelMessage, SetChannelIdMessage, SetChannelRfFrequencyMessage, SetChannelPeriodMessage, OpenRxScanModeMessage, OpenChannelMessage, MessageChecksumError, BroadcastMessage, StartupMessage, ChannelEvent, EventCode, ExtendedAssignmentOptions, RequestMessage, ChannelStatusMessage, ChannelStatus } from "./Messages";
+import { Message, ResetMessage, SetNetworkKeyMessage, AssignChannelMessage, SetChannelIdMessage, SetChannelRfFrequencyMessage, SetChannelPeriodMessage, OpenRxScanModeMessage, OpenChannelMessage, MessageChecksumError, BroadcastMessage, StartupMessage, ChannelEvent, EventCode, ExtendedAssignmentOptions, RequestMessage, ChannelStatusMessage, ChannelStatus, SetChannelHighPrioritySearchTimeoutMessage, SetChannelLowPrioritySearchTimeoutMessage } from "./Messages";
 import { ChannelType, NetworkKey } from "./Network";
 
 
 interface QueuedMessage {
     message: Message,
     callback: () => void,
+}
+
+interface PendingMessage extends QueuedMessage {
+    pending_since: Date;
 }
 
 export interface NodeConfig {
@@ -30,6 +34,9 @@ export interface ChannelConfig {
     device_type: number;
     network_number: number;
     assignment_options?: ExtendedAssignmentOptions;
+    wait_until_tracking?: boolean;
+    hp_search_timeout_in_seconds?: number;
+    lp_search_timeout_in_seconds?: number;
 }
 
 
@@ -41,8 +48,9 @@ export class NotConnectedError extends Error { };
 
 export abstract class Node {
     protected configuration: NodeConfig;
-    protected driver: Driver;
+    private driver: Driver;
     private out_queue: QueuedMessage[] = [];
+    private pending: PendingMessage[] = [];
     private log: Console = null;
     private connected: boolean = false;
 
@@ -65,9 +73,10 @@ export abstract class Node {
             await this.driver.open();
         };
 
-        await this.initializeANTConnection();
+        const init_promise = this.initializeANTConnection();
         this.connected = true;
         this.sendReceiveCycle();
+        return init_promise;
     }
 
     public async disconnect(close_driver: boolean = false): Promise<void> {
@@ -86,11 +95,11 @@ export abstract class Node {
                     message: out_message,
                     callback,
                 } = this.out_queue.shift();
-                await this.driver.sendMessage(out_message, callback);
+                await this.sendMessage(out_message, callback);
             }
 
             try {
-                const in_message = await this.driver.receiveMessage();
+                const in_message = await this.receiveMessage();
                 this.processMessage(in_message);
             } catch (e) {
                 if (this.connected) {
@@ -104,30 +113,71 @@ export abstract class Node {
 
     protected abstract processMessage(in_message: Message): void;
 
+    protected async receiveMessage(): Promise<Message> {
+        const in_message = await this.driver.receiveMessage();
+        if (this.pending.length > 0) {
+            const pending_message = this.pending.shift();
+            if (pending_message.message.isReply(in_message)) {
+                if (pending_message.callback) pending_message.callback();
+            } else {
+                this.pending.unshift(pending_message);
+            }
+        }
+        return in_message;
+    }
+
+    protected async sendMessage(message: Message, callback: () => void = undefined): Promise<void> {
+        if (message.waitForReply()) {
+            this.pending.push({
+                message,
+                callback,
+                pending_since: new Date(),
+            });
+        }
+        await this.driver.sendMessage(message);
+    }
+
     private async initializeANTConnection(): Promise<void> {
 
         if (this.configuration.reset) {
-            await this.driver.sendMessage(new ResetMessage());
+            await this.sendMessage(new ResetMessage());
             await new Promise((resolve) => setTimeout(resolve, 500));
         }
 
         for (const network_config of this.configuration.networks) {
-            await this.driver.sendMessage(new SetNetworkKeyMessage(network_config.key, network_config.number));
+            await this.sendMessage(new SetNetworkKeyMessage(network_config.key, network_config.number));
         }
 
         for (const channel_config of this.configuration.channels) {
             this.log_info("opening channel", channel_config.number);
-            await this.driver.sendMessage(new AssignChannelMessage(channel_config.type, channel_config.number, channel_config.network_number, channel_config.assignment_options));
-            await this.driver.sendMessage(new SetChannelIdMessage(channel_config.device_type, channel_config.number));
-            await this.driver.sendMessage(new SetChannelRfFrequencyMessage(channel_config.rf_frequency, channel_config.number));
-            await this.driver.sendMessage(new SetChannelPeriodMessage(channel_config.period, channel_config.number));
+            await this.sendMessage(new AssignChannelMessage(channel_config.type, channel_config.number, channel_config.network_number, channel_config.assignment_options));
+            await this.sendMessage(new SetChannelIdMessage(channel_config.device_type, channel_config.number));
+            await this.sendMessage(new SetChannelRfFrequencyMessage(channel_config.rf_frequency, channel_config.number));
+            await this.sendMessage(new SetChannelPeriodMessage(channel_config.period, channel_config.number));
+            
+            if (channel_config.hp_search_timeout_in_seconds !== undefined) {
+                await this.sendMessage(new SetChannelHighPrioritySearchTimeoutMessage(channel_config.number, channel_config.hp_search_timeout_in_seconds));
+            }
+
+            if (channel_config.lp_search_timeout_in_seconds !== undefined) {
+                await this.sendMessage(new SetChannelLowPrioritySearchTimeoutMessage(channel_config.number, channel_config.lp_search_timeout_in_seconds));
+            }
 
             if (channel_config.scan === true) {
-                await this.driver.sendMessage(new OpenRxScanModeMessage());
+                await this.sendMessage(new OpenRxScanModeMessage());
                 this.log_info("openend channel", channel_config.number, "in scan mode");
             } else {
-                await this.driver.sendMessage(new OpenChannelMessage(channel_config.number));
+                await this.sendMessage(new OpenChannelMessage(channel_config.number));
                 this.log_info("openend channel", channel_config.number);
+
+                let wait = channel_config.wait_until_tracking === true;
+                while (wait) {
+                    await this.sendMessage(new RequestMessage(channel_config.number, ChannelStatusMessage.ID, (msg: ChannelStatusMessage) => {
+                        console.log("waiting for channel", channel_config.number, `to be TRACKING (is ${ChannelStatus[msg.getStatus()]}).`);
+                        wait = msg.getStatus() !== ChannelStatus.TRACKING;
+                    }));
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                }
             }
         }
     }
