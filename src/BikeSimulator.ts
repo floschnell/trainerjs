@@ -4,6 +4,10 @@ import * as gpxParser from "gpxparser";
 import { MathHelpers } from "./MathHelpers";
 import { ChartPoint } from "chart.js";
 import { BikeTrainer, BikeTrainerData } from "./BikeTrainer";
+import { padStart } from 'lodash';
+import { buildGPX, StravaBuilder } from 'gpx-builder';
+import { Segment, Track } from "gpx-builder/dist/builder/BaseBuilder/models";
+const { Point } = StravaBuilder.MODELS;
 
 const CHART_METRICS = [
     {
@@ -237,24 +241,29 @@ export class BikeSimulator {
     }
 
     public export(): void {
-        const lines: [number, number, number, Date][] = this.recording.map((entry) => {
+        const lines: [number, number, number, Recording][] = this.recording.map((entry) => {
             const pos = this.getPosByDistance(entry.distance);
-            return [pos.longitude, pos.latitude, pos.elevation, new Date(entry.time)];
+            return [pos.longitude, pos.latitude, pos.elevation, entry];
         });
-        download("test.xml", this.createXmlString([lines]));
+        const now = new Date();
+        const date = `${now.getFullYear()}-${padStart(now.getMonth() + 1, 2, '0')}-${padStart(now.getDate(), 2, '0')}_${padStart(now.getHours(), 2, '0')}-${padStart(now.getMinutes(), 2, '0')}`
+        download(`${this.gpxFileInput.files[0].name.split('.').slice(0, -1).join('.')}_${date}.gpx`, this.createStravaGpx(lines));
     }
 
-    private createXmlString(lines: [number, number, number, Date][][]) {
-        let result = '<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" version="1.1" creator="runtracker"><metadata/><trk><name></name><desc></desc>'
-        result += lines.reduce((accum, curr) => {
-            let segmentTag = '<trkseg>';
-            segmentTag += curr.map((point) => `<trkpt lat="${point[1]}" lon="${point[0]}"><ele>${point[2]}</ele><time>${point[3].toISOString()}</time></trkpt>`).join('');
-            segmentTag += '</trkseg>'
+    private createStravaGpx(lines: [number, number, number, Recording][]) {
+        const gpxData = new StravaBuilder();
+        const points = lines.map(([long, lat, ele, entry]) => new Point(lat, long, {
+            ele,
+            time: new Date(entry.time),
+            power: Math.round(entry.power),
+            distance: Math.round(entry.distance * 100) / 100,
+            cad: Math.round(entry.cadence),
+            speed: Math.round(entry.speed * 10) / 10,
+            hr: Math.round(entry.heart_rate),
+        }));
+        gpxData.setTracks([new Track([new Segment(points)], { type: '17' })]);
 
-            return accum += segmentTag;
-        }, '');
-        result += '</trk></gpx>';
-        return result;
+        return buildGPX(gpxData.toObject());
     }
 
     public seek(value: number): number {
@@ -669,7 +678,7 @@ export class BikeSimulator {
 
     private getPosByDistance(distance: number): RiderPosition {
         const nextIndex = Math.ceil(distance / 20);
-        const nextSegment = this.smoothedSegments[nextIndex];
+        const nextSegment = this.smoothedSegments[Math.min(nextIndex, this.smoothedSegments.length - 1)];
         const prevSegment = nextIndex > 0 ? this.smoothedSegments[nextIndex - 1] : undefined;
 
         if (prevSegment === undefined) {

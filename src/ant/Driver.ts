@@ -9,17 +9,6 @@ export interface Driver {
 }
 
 
-interface USBDevice {
-    open(): Promise<void>;
-    selectConfiguration(config: number): Promise<void>;
-    claimInterface(iface: number): Promise<void>;
-    transferOut(channel: number, data: ArrayBuffer): Promise<boolean>;
-    transferIn(channel: number, maxBytes: number): Promise<any>;
-    reset(): Promise<any>;
-    releaseInterface(iface: number): Promise<any>;
-    close(): Promise<any>;
-};
-
 
 class NotOpenError extends Error {};
 
@@ -30,6 +19,7 @@ class AlreadyOpenError extends Error {};
 export class UsbDriver implements Driver {
     private device: USBDevice;
     private is_open: boolean;
+    private data: Array<number>;
 
     async open(): Promise<void> {
         if (this.is_open) throw new AlreadyOpenError();
@@ -74,18 +64,26 @@ export class UsbDriver implements Driver {
         await this.device.transferOut(1, message_bytes);
     }
 
+    async receiveData(): Promise<void> {
+        const result = await this.device.transferIn(1, 1024);
+        this.data = [
+            ...(this.data || []),
+            ...new Uint8Array(result.data.buffer)
+        ];
+    }
+
     async receiveMessage(): Promise<Message> {
         if (!this.is_open) throw new NotOpenError();
 
         let in_message: Message = null;
         do {
-            const in_byte = new DataView((await this.device.transferIn(1, 1)).data.buffer).getUint8(0);
+            await this.receiveData();
+            const in_byte = this.data.shift()
             if (in_byte === Message.SYNC_BYTE) {
-                const message_size = new DataView((await this.device.transferIn(1, 1)).data.buffer).getUint8(0);
-                const message_body = new Uint8Array((await this.device.transferIn(1, message_size + 2)).data.buffer);
-                const message_id = message_body[0];
-                const message_content = [...message_body.slice(1, message_size + 1)];
-                const message_checksum = message_body[message_size + 1];
+                const message_size = this.data.shift();
+                const message_id = this.data.shift();
+                const message_content = this.data.splice(0, message_size);
+                const message_checksum = this.data.shift();
                 in_message = buildMessage(message_id, message_content, message_checksum);
             } else {
                 console.warn("dropping byte:", in_byte);
