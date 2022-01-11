@@ -9,6 +9,8 @@ export interface BikeTrainerData {
     readonly distance: number;
     readonly slope: number;
     readonly weight: number;
+    readonly heart_rate: number;
+    readonly break_temp: number;
 }
 
 /**

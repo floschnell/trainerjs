@@ -3,6 +3,8 @@ const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   entry: './src/index.ts',
+  devtool: 'inline-source-map',
+  mode: process.env.NODE_ENV || 'development',
   module: {
     rules: [
       {
@@ -33,5 +35,18 @@ module.exports = {
         { from: "src/styles.css", to: "." },
       ],
     }),
-  ]
+  ],
+  devServer: {
+    static: {
+      directory: path.join(__dirname, 'public'),
+    },
+    compress: true,
+    port: 8080,
+    client: {
+      overlay: {
+        errors: true,
+        warnings: false,
+      },
+    }
+  },
 };

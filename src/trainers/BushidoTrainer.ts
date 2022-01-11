@@ -98,7 +98,7 @@ export class BushidoTrainer extends Node implements BikeTrainer {
     public onButtonUp: () => void = null;
     public onButtonRight: () => void = null;
 
-    constructor(log = null) {
+    constructor(log = console) {
         super(new UsbDriver(), {
             networks: [
                 {
